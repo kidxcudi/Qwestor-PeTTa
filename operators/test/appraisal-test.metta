@@ -23,10 +23,10 @@
 ; !(let $x (goalWeight &space) $x)
 ; !(match  &space (AG $action $params) (AG $action $params))
 ; !(getGoals &space)
-!(update-goal &space over_honesty 0.99997)
+;!(update-goal &space over_honesty 0.99997)
 ; !(getGoal &space over_honesty)
 ; !(goalWeight &space)
-!(appraisalModulator &space)
+; !(appraisalModulator &space)
 
 !(----------------------------------------------------------------------------------)
 
@@ -40,7 +40,7 @@
 !(test (get-goals &space) (default-goals))
 
 ;; Test for get_state
-!(test (get_state &space) (state (default-goals) (default-mods)))
+!(test (get_state &space) (state (turn 0) (default-goals) (default-mods) (default-anti-goals) (alpha)))
 
 ;; Test for remove-state and add-state
 !(test (
@@ -49,7 +49,7 @@
       ($state (get_state &space))
       ) $state) ())
 ; Add state back to the space for further testing
-!(addState &space (state (default-goals) (default-mods)))
+!(addState &space (state (turn 0) (default-goals) (default-mods) (default-anti-goals) (alpha)))
 
 ;; Test for getContext
 !(test (getContext &space complexity) 0.30)
@@ -100,4 +100,7 @@
 )
 
 ;; Test for calculate-mod
+; TODO: add tests for calculate-modulator function
 
+;; Test for getAntiGoals
+!(test (getAntiGoals &space) (default-anti-goals))
