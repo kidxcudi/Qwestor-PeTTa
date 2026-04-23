@@ -78,7 +78,7 @@
             (over_safety          (eval (replaceByIndex $current-goal 12 ($name $value))))
             (over_honesty         (eval (replaceByIndex $current-goal 13 ($name $value))))
         )))
-        ($updated-state (state $current-turn (cons goal-vector $updateGoal) $current-modulator-vec $current-anti-goal $current-alpha))
+        ($updated-state (state $current-turn (cons goal-vector $update-goal) $current-modulator-vec $current-anti-goal $current-alpha))
         ($_ (remove-state $space))
      )
      (add-atom $space $updated-state)
