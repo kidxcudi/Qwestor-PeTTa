@@ -1,4 +1,4 @@
-; !(import! &self "context.py")
+; (import! &self "context.py")
 
 
 ; type signiture

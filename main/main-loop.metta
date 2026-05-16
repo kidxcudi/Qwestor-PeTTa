@@ -1,64 +1,67 @@
+!(import! &self "context_parser.py")
+!(import! &self ../utils/general-helper)
 !(import! &self state)
-!(import! &self ../operators/appraisal)
+!(import! &self ../operators/homeostasis)
 !(import! &self ../operators/decision)
-!(import! &self "context.py")
-!(import! &self space)
+!(import! &self ../operators/appraisal)
+!(import! &self "score_action.py")
+!(import! &self score-actions)           
+!(import! &self ../operators/routing)
 
 
-; ─────────────────────────────────────────────
-; Main loop overview
-; ─────────────────────────────────────────────
-; 1. Parse user query → context signals via LLM (context.py).
-; 2. Store context signals in the space.
-; 3. Compute updated modulators with calculate-mod.
-; 4. Update the state's modulator vector.
-; 5. [Planned] Decision module: update goal weights, choose action.
-; 6. [Planned] Generate LLM response, feed user reply back into context.
+!(bind! &space (new-space))
+
+!(addAlpha &space (alpha))
+!(addState &space (state (turn 0) (default-goals) (default-mods) (default-anti-goals) (alpha)))
 
 
-; ─────────────────────────────────────────────
-; addContexts
-; If no context was parsed (empty list), inject
-; the built-in defaults instead.
-; ─────────────────────────────────────────────
 (= (addContexts $space $context)
    (if (== $context ())
         (add-context $space (context))
-        (add-context $space $context)
-    )
-)
+        (add-context $space $context)))
 
-
-; ─────────────────────────────────────────────
-; setUpSpace
-; Populate a fresh space with alpha hyper-params
-; and an initial state (default goals + default mods).
-; ─────────────────────────────────────────────
-(= (setUpSpace $space)
+ 
+(= (full-step $space $query)
    (let*
      (
-      ($_ (addAlpha $space (alpha)))
-      ($_ (addState $space  (state (turn 0) (default-goals) (default-mods) (default-anti-goals) (alpha))))
-      )
-     "atoms added"
+       ($context-list (py-call (context_parser.wrap_parser $query)))
+       ($_ (addContexts $space $context-list))
+       ($_ (println! ("[STEP 1] context-list: "$context-list)))  
+
+       ($appraisal (appraisalModulator $space))
+       ($_ (println! ("[STEP 2] appraisal:" $appraisal)))
+
+       ($weights (goalWeight $space))
+       ($_ (println! ("[STEP 3] weights:" $weights)))
+
+       ($scores (score-all-actions $space $appraisal $weights))
+       ($_ (println! ("[STEP 4] scores:" $scores)))
+
+       ($guarded (apply-routing-guards $scores $appraisal $space))
+       ($_ (println! ("[STEP 5] guarded:" $guarded)))
+
+       ($intent  (find_by_key intent_type $appraisal))
+       ($lc      (find_by_key low_confidence $appraisal))
+       ($thr     (find_by_key threshold $appraisal))
+       ($margin  (getAlpha $space intent_margin))
+       ($result  (selectAction $guarded $intent $lc $thr $margin))
+
+       ($_ (println! ("[STEP 6] result:" $result)))
+       ($best    (car-atom $result))
+
+       ($style
+         (if (== $best act_respond)
+             (determine-respond-style $space $appraisal)
+             no-style))
+       ($_ (println! ("[STEP 7] style:" $style)))
+
+       ($_ (post-update $space $best))
+       ($_ (println! ("[STEP 8] post-update done")))
+ 
+      
      )
-)
-
-
-(= (mainLoop $space $query)
-    (let* (
-            ($context       (py-call (context.wrap_parser $query)))
-            ($_ (addContexts $space $context))
-            ($calculated-mods (calculate-mod $space))    
-            ($_ (update-mods $space $calculated-mods))
-          )
-        $calculated-mods
+     ($best $style $appraisal)
     )
 )
 
-; ─────────────────────────────────────────────
-; Entry point
-; ─────────────────────────────────────────────
-; !(setUpSpace &space)
-; !(mainLoop &space "Can you verify if the quantum computing breakthrough is real? I need detailed analysis comparing expert opinions.")
-(..................)
+!(full-step &space "Verify this medical statistic before answering; include uncertainty if evidence is weak.")
