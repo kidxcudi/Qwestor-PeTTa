@@ -76,8 +76,8 @@
         ($updated-state (state $current_turn (cons goal-vector $updated-goal) $current-modulator-vec $current-anti-goal $current-alpha))
         ($_ (println! ("updated-state: " $updated-state)))
         ($old (match $space (state (turn $turn) $x $y $z $alpha) (state (turn $turn) $x $y $z $alpha)))
-        ($_ (println! ("old: " $old)))
-        (remove-atom $space $old)
+        ($_ (println! ("old-state: " $old)))
+        ($_ (remove-atom $space $old))
 
      )
      (add-atom $space $updated-state)
@@ -435,7 +435,7 @@
        ($alpha-near (getAlpha_homeo $space homeostasis_alpha_near))
      )
      (if (== $enabled 0)
-         ("Homeostasis Disabled")
+         (println! (Homeostasis Disabled))
          (let*
            (
              ($_ (homeo-contract-goal $space efficiency           0.0 1.0 $eta $alpha-near))
@@ -468,7 +468,7 @@
              ($_ (homeo-contract-mod $space resolution))
              ($_ (homeo-contract-mod $space user_expertise))
            )
-           ("Homeostasis Applied")
+           (println! (Homeostasis Applied))
         )
      )
    )
