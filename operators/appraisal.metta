@@ -7,69 +7,6 @@
 ;
 ; ─────────────────────────────────────────────
 
-
-; ─────────────────────────────────────────────
-; Space-parameterised accessors
-; ─────────────────────────────────────────────
-(= (getMods $space)  (match $space (state (turn $turn) $x $y $z $alpha) $y))
-(= (getState $space)(match $space (state (turn $turn)  $x $y $z $alpha) (state (turn $turn ) $x $y $z $alpha)))
-
-(= (remove-state $space)
- (let $state (getState $space) (remove-atom $space $state))
-)
-
-; Retrieve the value of a single modulator by name.
-(= (getMod $space $modulator-name)
-    (let*
-      (
-        ($mod-vec   (match $space (state $turn  $x $y $z $alpha) $y))
-        ($mod-list  (cdr-atom $mod-vec))
-        ($pair      (matchValue $modulator-name $mod-list))
-      )
-      (index-atom $pair 1)
-    )
-)
-
-; Map a modulator name to the element at its canonical index.
-(= (matchValue $modulator-name $mod-list)
-    (case $modulator-name
-          (
-            (m_urgency           (index-atom $mod-list 0))
-            (m_resolution        (index-atom $mod-list 1))
-            (m_user_expertise    (index-atom $mod-list 2))
-            (m_threshold         (index-atom $mod-list 3))
-            (m_topic_familiarity (index-atom $mod-list 4))
-            (m_failure_wariness  (index-atom $mod-list 5))
-            (m_securing          (index-atom $mod-list 6))
-            (m_approach          (index-atom $mod-list 7))
-            (m_arousal           (index-atom $mod-list 8))
-            (m_risk_aversion     (index-atom $mod-list 9))
-            (m_error_tolerance   (index-atom $mod-list 10))
-            (m_creativity        (index-atom $mod-list 11))
-            (m_valence           (index-atom $mod-list 12))
-            ($_ "value not found")
-          )
-      )
-)
-
-; Retrieve a single context signal by name.
-(= (getContext $space $name)
- (match $space ($name $val) $val)
-)
-
-; Retrieve a single alpha hyper-parameter by name.
-(= (getAlpha $space $name)
-      (match $space ($name $y) $y)
-)
-
-; ─────────────────────────────────────────────
-; addState / addItems / addAlpha / add-context
-; ─────────────────────────────────────────────
-
-(= (addState $space $state)
-    (add-atom $space $state)
-)
-
 (= (addItems $baseCase $space $items)
    (if (== $items ())
         $baseCase
@@ -85,24 +22,6 @@
 
 (= (addAlpha $space $list)    (addItems () $space $list))
 (= (add-context $space $list) (addItems () $space $list))
-
-
-; ─────────────────────────────────────────────
-; update-mods – replace the whole modulator vector.
-; ─────────────────────────────────────────────
-(= (update-mods $space $mods)
-      (let* (
-         ($goal     (getGoals $space))
-         ($t   (match $space (state $turn  $x $y $z $alpha) $turn))
-         ($alpha    (match $space (state $turn  $x $y $z $alpha) $alpha))
-         ($anti  (match $space (state $turn  $x $y $z $alpha) $z))
-         ($_ (remove-state $space))
-         ($updated  (state  $t $goal (cons modulator-vector $mods) $anti $alpha))
-         ($_ (addState $space $updated))          
-         )
-         (println! (mods update success 🎉))
-   )
-)
 
 
 ; ─────────────────────────────────────────────
@@ -415,13 +334,6 @@
         $results 
     )
 )
-
-
-(= (getAntiGoals $space)
-     (match $space (state $t $x $y $anti_goals $alpha) $anti_goals)
-)
-
-
 
 ; ─────────────────────────────────────────────
 ; Alpha hyper-parameters (learning rates)

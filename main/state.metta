@@ -1,6 +1,3 @@
-; (import! &self "context.py")
-
-
 ; type signiture
 ; x=GxM where G=goal(goal) vector and M= modulator vector
 ;  (..................... energy affiliation competence )
@@ -28,31 +25,6 @@
 (= (add-state $space)
     (add-atom $space $state)
 )
-
-(= (remove-state $space)
- (let $state (match $space (state $x $y $z) (state $x $y $z)) (remove-atom $space $state))
-)
-
-(= (replaceByIndex $expr $index $new)
-    (if (== $expr ())
-        $expr
-        (let*
-            (
-                ($first (car-atom $expr))
-                ($tail (cdr-atom $expr))
-            )
-            (if (== $index 0)
-                (if (== $tail ())
-                    ($new)
-                    (cons-atom $new $tail)
-                )
-                (let $c (replaceByIndex $tail (- $index 1) $new)
-                    (cons-atom $first $c)
-                )))))
-
-
-
-
 
 (= (update-single-mods $space $mod-list) 
 (if (== () $mod-list)
