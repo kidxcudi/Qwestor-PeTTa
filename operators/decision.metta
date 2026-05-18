@@ -1,98 +1,43 @@
-; ─────────────────────────────────────────────
-;
-; Goal vector accessors and weight computation.
-;
-; ─────────────────────────────────────────────
-; ── constants ───────────────────────────────────────────────
-(= (ACTION-BLOCKED-SCORE) -1000000000.0)
-(= (ACTION-ACTIVE-FLOOR) -100000000.0)
-
 
 ; ─────────────────────────────────────────────
-; get-goal – read a single goal value by name.
-;   match the canonical default-goals ordering.
+; Helper: read one value from a goal-vector tuple
 ; ─────────────────────────────────────────────
-(= (get-goal $space $goal-name)
- (let*
-  (
-    ($goal-vec  (match $space (state (turn $turn) $g $m $anti $alpha) $g))
-    ($goal-list (cdr-atom $goal-vec))
-
-    ($pair
-      (case $goal-name
-        (
-          (efficiency           (index-atom $goal-list 0))
-          (accuracy             (index-atom $goal-list 1))
-          (success_moderate     (index-atom $goal-list 2))
-          (knowledge            (index-atom $goal-list 3))
-          (novelty              (index-atom $goal-list 4))
-          (success_breakthrough (index-atom $goal-list 5))
-          (coherence            (index-atom $goal-list 6))
-          (originality          (index-atom $goal-list 7))
-          (social               (index-atom $goal-list 8))
-          (help_short           (index-atom $goal-list 9))
-          (help_long            (index-atom $goal-list 10))
-          (over_beneficial      (index-atom $goal-list 11))
-          (over_safety          (index-atom $goal-list 12))
-          (over_honesty         (index-atom $goal-list 13))
-        )
-      )
-    )
-  )
-  (index-atom $pair 1)
- )
-)
-
-
-
-; ─────────────────────────────────────────────
-; getGoal – convenience alias matching the name
-;           used inside goalWeight formulas.
-; ─────────────────────────────────────────────
-(= (getGoal $space $goal-name)
-   (get-goal $space $goal-name)
-)
-(= (getGoals $space)(match $space (state (turn $turn) $x $y $z $alpha) $x))
-
-(= (remove-state $space)
- (let $state (match $space (state (turn $turn) $x $y $z $alpha)) (remove-atom $space $state))
-) 
-; ─────────────────────────────────────────────
-; updateGoal – replace one goal's value.
-; ─────────────────────────────────────────────
-(= (updateGoal $space $name $value)
-    (let*
-     (
-        ($current-turn (match $space (state $turn $x $y $anti $alpha) $turn))
-        ($current-modulator-vec (match $space (state $turn $x $y $anti $alpha) $y))
-        ($current-goal (cdr-atom (match $space (state $turn $x $y $anti $alpha) $x)))
-        ($current-anti-goal (match $space (state $turn $x $y $anti $alpha) $anti))
-        ($current-alpha (match $space (state $turn $x $y $anti $alpha) $alpha))
-        
-        ($updated-goal  (case $name
-        (
-            (efficiency           (eval (replaceByIndex $current-goal 0  ($name $value))))
-            (accuracy             (eval (replaceByIndex $current-goal 1  ($name $value))))
-            (success_moderate     (eval (replaceByIndex $current-goal 2  ($name $value))))
-            (knowledge            (eval (replaceByIndex $current-goal 3  ($name $value))))
-            (novelty              (eval (replaceByIndex $current-goal 4  ($name $value))))
-            (success_breakthrough (eval (replaceByIndex $current-goal 5  ($name $value))))
-            (coherence            (eval (replaceByIndex $current-goal 6  ($name $value))))
-            (originality          (eval (replaceByIndex $current-goal 7  ($name $value))))
-            (social               (eval (replaceByIndex $current-goal 8  ($name $value))))
-            (help_short           (eval (replaceByIndex $current-goal 9  ($name $value))))
-            (help_long            (eval (replaceByIndex $current-goal 10 ($name $value))))
-            (over_beneficial      (eval (replaceByIndex $current-goal 11 ($name $value))))
-            (over_safety          (eval (replaceByIndex $current-goal 12 ($name $value))))
-            (over_honesty         (eval (replaceByIndex $current-goal 13 ($name $value))))
-        )))
-        ($updated-state (state $current-turn (cons goal-vector $updated-goal) $current-modulator-vec $current-anti-goal $current-alpha))
-        ($_ (remove-state $space))
+(= (goalTarget-get $gvec $name)
+   (case $name
+     ( 
+      (efficiency (cdr-atom (index-atom (cdr-atom $gvec) 0)))
+      (accuracy   (cdr-atom (index-atom (cdr-atom $gvec) 1)))
+      (success_moderate   (cdr-atom (index-atom (cdr-atom $gvec) 2)))
+      (knowledge   (cdr-atom (index-atom (cdr-atom $gvec) 3)))
+      (novelty   (cdr-atom (index-atom (cdr-atom $gvec) 4)))
+      (success_breakthrough   (cdr-atom (index-atom (cdr-atom $gvec) 5)))
+      (coherence   (cdr-atom (index-atom (cdr-atom $gvec) 6)))
+      (originality   (cdr-atom (index-atom (cdr-atom $gvec) 7)))
+      (social   (cdr-atom (index-atom (cdr-atom $gvec) 8)))
+      (help_short   (cdr-atom (index-atom (cdr-atom $gvec) 9)))
+      (help_long   (cdr-atom (index-atom (cdr-atom $gvec) 10)))
+      (over_beneficial   (cdr-atom (index-atom (cdr-atom $gvec) 11)))
+      (over_safety   (cdr-atom (index-atom (cdr-atom $gvec) 12)))
+      (over_honesty   (cdr-atom (index-atom (cdr-atom $gvec) 13)))
      )
-     (add-atom $space $updated-state)
-      )
+   )
+)
+; ─────────────────────────────────────────────
+; Helper: read from anti-goal-vector
+; ─────────────────────────────────────────────
+(= (antiGoal-get $ag $name)
+   (case $name
+     (
+       (hallucinate (cdr-atom (index-atom (cdr-atom $ag) 0)))
+       (redundant   (cdr-atom (index-atom (cdr-atom $ag) 1)))
+       (rabbit_hole (cdr-atom (index-atom (cdr-atom $ag) 2)))
+       (premature   (cdr-atom (index-atom (cdr-atom $ag) 3)))
+     )
+   )
 )
 
+(= (antiGoalTarget-get $agvec $name)
+   (antiGoal-get $agvec $name))
 
 ; ─────────────────────────────────────────────
 ; updateGoals – replace the entire goal list.
@@ -100,50 +45,25 @@
 (= (updateGoals $space $goals)
       (let* (
          ($mods     (getMods $space))
+         ($_ (println! ("mods" $mods)))
+
          ($alpha  (match $space (state $turn $x $y $anti $alpha) $alpha))
+         ($_ (println! ("alpha" $alpha)))
+
          ($anti  (match $space (state $turn $x $y $anti $alpha) $anti))
+         ($_ (println! ("anti" $anti)))
+
          ($t   (match $space (state $turn $x $y $anti $alpha) $turn))
-         ($_ (remove-state $space))
+         ($_ (println! ("t" $t)))
+
+         ($_ (remove-state-app $space))
          ($updated  (state $t (cons goal-vector $goals) $mods $anti $alpha))
-         ($_ (add-atom $space $updated))    ; ← $space was missing before
+         ($_ (println! ("updated" $updated)))
+
+         ($_ (add-atom $space $updated))   
          )
          (println! (goals update success 🎉))
    )
-)
-
-(= (getContext_dec $space $name)
- (match $space ($name $val) $val)
-)
-(= ( matchValue_dec $modulator-name $mod-list)
-    (case $modulator-name
-          (
-            (m_urgency           (index-atom $mod-list 0))
-            (m_resolution        (index-atom $mod-list 1))
-            (m_user_expertise    (index-atom $mod-list 2))
-            (m_threshold         (index-atom $mod-list 3))
-            (m_topic_familiarity (index-atom $mod-list 4))
-            (m_failure_wariness  (index-atom $mod-list 5))
-            (m_securing          (index-atom $mod-list 6))
-            (m_approach          (index-atom $mod-list 7))
-            (m_arousal           (index-atom $mod-list 8))
-            (m_risk_aversion     (index-atom $mod-list 9))
-            (m_error_tolerance   (index-atom $mod-list 10))
-            (m_creativity        (index-atom $mod-list 11))
-            (m_valence           (index-atom $mod-list 12))
-            ($_ "value not found")
-          )
-      )
-)
-
-(= (getMod_dec $space $modulator-name)
-    (let*
-      (
-        ($mod-vec   (match $space (state $turn  $x $y $z $alpha) $y))
-        ($mod-list  (cdr-atom $mod-vec))
-        ($pair      ( matchValue_dec $modulator-name $mod-list))
-      )
-      (index-atom $pair 1)
-    )
 )
 ; ─────────────────────────────────────────────
 ; goalWeight – compute weighted goal values
@@ -153,19 +73,19 @@
     (let*
       (
         ; ── context signals ──────────────────────────────
-        ($complexity       (getContext_dec $space complexity))
+        ($complexity       (getContext $space complexity))
         ($_ (println! ("complex" $complexity)))
-        ($failure_signal   (getContext_dec $space failure_signal))
+        ($failure_signal   (getContext $space failure_signal))
         ($_ (println! ("failure_signal ctx" $failure_signal)))
-        ($urg_ctx          (getContext_dec $space urgent))
+        ($urg_ctx          (getContext $space urgent))
 
         ; ── modulator values ─────────────────────────────
-        ($urgency          (getMod_dec $space m_urgency))
+        ($urgency          (getMod $space m_urgency))
         ($_ (println! ("urgency ctx" $urgency)))
-        ($resolution       (getMod_dec $space m_resolution))
-        ($threshold        (getMod_dec $space m_threshold))
-        ($securing         (getMod_dec $space m_securing))
-        ($valence          (getMod_dec $space m_valence))
+        ($resolution       (getMod $space m_resolution))
+        ($threshold        (getMod $space m_threshold))
+        ($securing         (getMod $space m_securing))
+        ($valence          (getMod $space m_valence))
         ($_ (println! ("modulator values" $resolution $threshold $securing $valence)))
 
         ; ── derived signal ───────────────────────────────
@@ -305,27 +225,27 @@
     (let*
         (
             ; ── context signals ──────────────────────────────
-            ($cx              (getContext_dec $space complexity))
+            ($cx              (getContext $space complexity))
             ($_ (println! ("cx: "$cx)))
-            ($urgent_bool     (getContext_dec $space urgent))
+            ($urgent_bool     (getContext $space urgent))
             ($_ (println! ("urgent: "$urgent_bool)))
 
-            ($ambiguity       (getContext_dec $space ambiguity))
+            ($ambiguity       (getContext $space ambiguity))
             ($_ (println! ("amb: "$ambiguity)))
 
-            ($threshold       (getContext_dec $space threshold))
+            ($threshold       (getContext $space threshold))
             ($_ (println! ("thre: "$threshold)))
 
-            ($failure_signal  (getContext_dec $space failure_signal))
+            ($failure_signal  (getContext $space failure_signal))
             ($_ (println! ("fails: "$failure_signal)))
 
-            ($expertise       (getContext_dec $space expertise))
+            ($expertise       (getContext $space expertise))
             ($_ (println! ("exper: "$expertise)))
 
-            ($topic_fam       (getContext_dec $space topic_familiarity))
+            ($topic_fam       (getContext $space topic_familiarity))
             ($_ (println! ("topicfam: "$topic_fam)))
 
-            ($reflective_int  (getContext_dec $space reflective_intent))
+            ($reflective_int  (getContext $space reflective_intent))
             ($_ (println! ("ref: "$reflective_int)))
 
 
@@ -616,21 +536,21 @@
 (= (antiGoalTargets $space $goals)
     (let*
         (
-            ($threshold      (getContext_dec $space threshold))
+            ($threshold      (getContext $space threshold))
             ($_ (println! ("threshold: " $threshold)))
-            ($familiarity    (getContext_dec $space topic_familiarity))
+            ($familiarity    (getContext $space topic_familiarity))
             ($_ (println! ("familiarity: " $familiarity)))
-            ($failure_signal (getContext_dec $space failure_signal))
+            ($failure_signal (getContext $space failure_signal))
             ($_ (println! ("failure_signal: " $failure_signal)))
-            ($urgent_bool    (getContext_dec $space urgent))
+            ($urgent_bool    (getContext $space urgent))
             ($_ (println! ("urgent_bool: " $urgent_bool)))
             ($urgency        (if (== $urgent_bool True) 1.0 0.0))
             ($_ (println! ("urgency: " $urgency)))
-            ($complexity     (getContext_dec $space complexity))
+            ($complexity     (getContext $space complexity))
             ($_ (println! ("complexity: " $complexity)))
-            ($ambiguity      (getContext_dec $space ambiguity))
+            ($ambiguity      (getContext $space ambiguity))
             ($_ (println! ("ambiguity: " $ambiguity)))
-            ($expertise      (getContext_dec $space expertise))
+            ($expertise      (getContext $space expertise))
             ($_ (println! ("expertise: " $expertise)))
             ($help_short_now (car-atom (goalTarget-get $goals help_short)))
             ($_ (println! ("help-short: " $help_short_now)))
@@ -676,16 +596,6 @@
         )
     )
 )
-
-
-; ── math helpers ────────────────────────────────────────────
-; (= (abs $x)
-;     (if (< $x 0.0)
-;         (* $x -1.0)
-;         $x
-;     )
-; )
-
 
 ; ── tuple / dictionary helpers (2-element tuples) ───────────
 (= (get-score (($k1 $v1) ($k2 $v2)) $key)
@@ -982,14 +892,6 @@
         )
     )
 )
-
-(= (getAntiGoals_dec $space)
-     (match $space (state $t $x $y $anti_goals $alpha) $anti_goals)
-)
-(= (getAlpha_dec $space $name)
-      (match $space ($name $y) $y)
-)
-
 ; ─────────────────────────────────────────────
 ; updateAntiGoals — replace the anti-goal block
 ; ─────────────────────────────────────────────
@@ -1001,7 +903,7 @@
        ($g     (match $space (state (turn $turn) $g $m $anti $alpha) $g))
        ($m     (match $space (state (turn $turn) $g $m $anti $alpha) $m))
        ($alpha (match $space (state (turn $turn) $g $m $anti $alpha) $alpha))
-       ($_ (remove-state $space))
+       ($_ (remove-state-app $space))
        ($new-anti (anti-goals
                     (hallucinate $hall)
                     (redundant   $red)
@@ -1027,7 +929,7 @@
        ($anti     (match $space (state (turn $n) $g $m $anti $alpha) $anti))
        ($alpha    (match $space (state (turn $n) $g $m $anti $alpha) $alpha))
        ($new-n    (+ $old-turn 1))
-       ($_ (remove-state $space))
+       ($_ (remove-state-app $space))
        ($_ (add-atom $space (state (turn $new-n) $g $m $anti $alpha)))
      )
      $new-n
@@ -1040,16 +942,17 @@
 ; anti-goals toward their targets, apply
 ; homeostasis, and increment turn_count.
 ; ─────────────────────────────────────────────
+
 (= (post-update $space $decision)
    (let*
      (
        ($goals     (getGoals $space))
        ($_ (println! ("goals: "$goals)))
-       ($anti      (getAntiGoals_dec $space))
+       ($anti      (getAntiGoals $space))
        ($_ (println! ("anti-goals: "$anti)))
-       ($alpha     (getAlpha_dec $space goal_alpha))
+       ($alpha     (getAlpha $space goal_alpha))
        ($_ (println! ("alpha: "$alpha)))
-       ($anti-alpha (getAlpha_dec $space anti_goal_alpha))
+       ($anti-alpha (getAlpha $space anti_goal_alpha))
        ($_ (println! ("anti-alpha: "$anti-alpha)))
 
        ($targets   (goalTargets $space $decision))
@@ -1104,6 +1007,8 @@
        ($new-over-honesty
          (_blend (getGoal $space over_honesty)
                  (car-atom (goalTarget-get $targets over_honesty)) $alpha))
+       ($_ (println! ("new-over-honesty: "$new-over-honesty)))
+
 
        ($_ (updateGoals $space (
              (efficiency           $new-efficiency)
@@ -1137,7 +1042,7 @@
        ($new-redundant
          (_blend (car-atom (antiGoal-get $anti redundant))
                  (car-atom (antiGoalTarget-get $ag-targets redundant)) $anti-alpha))
-       ($_ (println! ("new-redundant: "$new-hall)))
+       ($_ (println! ("new-redundant: "$new-redundant)))
 
        ($new-rabbit-hole
          (_blend (car-atom (antiGoal-get $anti rabbit_hole))
@@ -1160,57 +1065,6 @@
    )
 )
 
-; ─────────────────────────────────────────────
-; Helper: read one value from a goal-vector tuple
-; ─────────────────────────────────────────────
-(= (goalTarget-get $gvec $name)
-   (case $name
-     ( 
-      (efficiency (cdr-atom (index-atom (cdr-atom $gvec) 0)))
-      (accuracy   (cdr-atom (index-atom (cdr-atom $gvec) 1)))
-      (success_moderate   (cdr-atom (index-atom (cdr-atom $gvec) 2)))
-      (knowledge   (cdr-atom (index-atom (cdr-atom $gvec) 3)))
-      (novelty   (cdr-atom (index-atom (cdr-atom $gvec) 4)))
-      (success_breakthrough   (cdr-atom (index-atom (cdr-atom $gvec) 5)))
-      (coherence   (cdr-atom (index-atom (cdr-atom $gvec) 6)))
-      (originality   (cdr-atom (index-atom (cdr-atom $gvec) 7)))
-      (social   (cdr-atom (index-atom (cdr-atom $gvec) 8)))
-      (help_short   (cdr-atom (index-atom (cdr-atom $gvec) 9)))
-      (help_long   (cdr-atom (index-atom (cdr-atom $gvec) 10)))
-      (over_beneficial   (cdr-atom (index-atom (cdr-atom $gvec) 11)))
-      (over_safety   (cdr-atom (index-atom (cdr-atom $gvec) 12)))
-      (over_honesty   (cdr-atom (index-atom (cdr-atom $gvec) 13)))
-     )
-   )
-)
-
-; ─────────────────────────────────────────────
-; Helper: read from anti-goal-vector
-; ─────────────────────────────────────────────
-(= (antiGoal-get $ag $name)
-   (case $name
-     (
-       (hallucinate (cdr-atom (index-atom (cdr-atom $ag) 0)))
-       (redundant   (cdr-atom (index-atom (cdr-atom $ag) 1)))
-       (rabbit_hole (cdr-atom (index-atom (cdr-atom $ag) 2)))
-       (premature   (cdr-atom (index-atom (cdr-atom $ag) 3)))
-     )
-   )
-)
-
-(= (antiGoalTarget-get $agvec $name)
-   (antiGoal-get $agvec $name))
-
-
-
-
-
-
-
-
-
-
-
 ; style (works as style.py (corresponding python implementation))
 
 ; ─────────────────────────────────────────────
@@ -1226,7 +1080,7 @@
        ($amb  (find_by_key ambiguity $appraisal))
        ($ux   (find_by_key user_expertise $appraisal))
        ($thr  (find_by_key threshold $appraisal))
-       ($fw   (getMod_dec $space m_failure_wariness))
+       ($fw   (getMod $space m_failure_wariness))
        ($lc   (- 1.0 $thr))
        ($res  (find_by_key resolution $appraisal))
        ($app  (find_by_key approach $appraisal))

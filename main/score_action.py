@@ -376,7 +376,6 @@ def compute_scores(appraisal_metta, weights_metta, space_metta) -> str:
     familiarity_sig = float(ap.get("familiarity_signal", 0.0))
     ambiguity       = float(ap.get("ambiguity",       0.0))
 
-    low_confidence  = _clamp01(threshold)         
     answerability   = _clamp01(
         (1.0 - ambiguity) * (1.0 - threshold_signal) * familiarity_sig
     )
