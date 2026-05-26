@@ -1,4 +1,5 @@
 !(import! &self ../../utils/general-helper)
+!(import! &self ../../utils/utils)
 !(import! &self ../appraisal)
 !(import! &self ../homeostasis)
 !(import! &self ../decision)
@@ -12,9 +13,44 @@
 !(add-context &space (context))
 
 ; test for selectAction
-!(test (selectAction ((act_think 0.7) (act_search 0.72)) factual 0.35 0.44 0.03) (act_search ((act_search 0.7501) (act_think 0.7))))
-!(test (selectAction ((act_think 0.60) (act_search 0.90)) factual 0.35 0.44 0.03) (act_search ((act_search 0.9) (act_think 0.6))))
-!(test (selectAction ((act_think 0.80) (act_search 0.80)) reflective 0.20 0.40 0.05) (act_think ((act_think 0.8501000000000001) (act_search 0.8))))
+!(test (selectAction 
+  (
+    (act_respond -100000000)
+    (act_search 0.72)
+    (act_verify -100000000)
+    (act_clarify -100000000)
+    (act_decompose -100000000)
+    (act_think 0.7)
+    (act_synthesize -100000000)
+  )
+  factual 0.35 0.44 0.03)
+  (act_search ((act_think 0.7) (act_search 0.7501))))
+
+!(test (selectAction 
+  (
+    (act_respond -100000000)
+    (act_search 0.90)
+    (act_verify -100000000)
+    (act_clarify -100000000)
+    (act_decompose -100000000)
+    (act_think 0.60)
+    (act_synthesize -100000000)
+  )
+  factual 0.35 0.44 0.03)
+  (act_search ((act_think 0.6) (act_search 0.9))))
+
+!(test (selectAction 
+  (
+    (act_respond -100000000)
+    (act_search 0.80)
+    (act_verify -100000000)
+    (act_clarify -100000000)
+    (act_decompose -100000000)
+    (act_think 0.80)
+    (act_synthesize -100000000)
+  )
+  reflective 0.20 0.40 0.05)
+  (act_think ((act_search 0.8) (act_think 0.8501000000000001))))
 
 ; test for goalWeight calculation 
 !(test (goalWeight &space) ((efficiency 0.44772) (accuracy 0.6256599999999999) (success_moderate 1.02) (knowledge 0.41340000000000005) (novelty 0.3726) (success_breakthrough 0.37839999999999996) (coherence 0.5655) (originality 0.3504) (social 0.43210000000000004) (help_short 0.5142500000000001) (help_long 0.405) (over_beneficial 0.591) (over_safety 0.6174999999999999) (over_honesty 0.7214999999999999)))
@@ -43,14 +79,14 @@
 !(test (determine-respond-style
   &StyleSpace
   (
-    (u 0.95)
-    (cx 0.10)
+    (urgency 0.95)
+    (complexity 0.10)
     (ambiguity 0.05)
-    (ux 0.5)
+    (user_expertise 0.5)
     (threshold 0.3)
     (failure_wariness 0.2)
     (low_confidence 0.2)
-    (res 0.4)
+    (resolution 0.4)
     (approach 0.4)
     (creativity 0.3)
     (risk_aversion 0.2)
@@ -59,16 +95,16 @@
 ) style_concise)
 
 !(test (determine-respond-style
-  space
+  &StyleSpace
   (
-    (u 0.1)
-    (cx 0.95)
+    (urgency 0.1)
+    (complexity 0.95)
     (ambiguity 0.4)
-    (ux 0.5)
+    (user_expertise 0.5)
     (threshold 0.4)
     (failure_wariness 0.2)
     (low_confidence 0.3)
-    (res 0.9)
+    (resolution 0.9)
     (approach 0.4)
     (creativity 0.3)
     (risk_aversion 0.2)
@@ -77,33 +113,34 @@
 ) style_thorough)
 
 !(test (determine-respond-style
-  space
+  &StyleSpace
   (
-    (u 0.2)
-    (cx 0.6)
+    (urgency 0.2)
+    (complexity 0.6)
     (ambiguity 0.5)
-    (ux 0.5)
+    (user_expertise 0.5)
     (threshold 0.2)
     (failure_wariness 0.1)
     (low_confidence 0.2)
-    (res 0.4)
+    (resolution 0.4)
     (approach 0.95)
     (creativity 0.95)
     (risk_aversion 0.05)
     (verify_request false)
   )
 ) style_exploratory)
+
 !(test (determine-respond-style
-  space
+  &StyleSpace
   (
-    (u 0.3)
-    (cx 0.4)
+    (urgency 0.3)
+    (complexity 0.4)
     (ambiguity 0.6)
-    (ux 0.6)
+    (user_expertise 0.6)
     (threshold 0.9)
     (failure_wariness 0.9)
     (low_confidence 0.95)
-    (res 0.4)
+    (resolution 0.4)
     (approach 0.3)
     (creativity 0.3)
     (risk_aversion 0.9)
@@ -112,16 +149,16 @@
 ) style_cautious)
 
 !(test (determine-respond-style
-  space
+  &StyleSpace
   (
-    (u 0.2)
-    (cx 0.3)
+    (urgency 0.2)
+    (complexity 0.3)
     (ambiguity 0.6)
-    (ux 0.05)
+    (user_expertise 0.05)
     (threshold 0.3)
     (failure_wariness 0.2)
     (low_confidence 0.2)
-    (res 0.3)
+    (resolution 0.3)
     (approach 0.3)
     (creativity 0.3)
     (risk_aversion 0.2)
@@ -235,10 +272,10 @@
 )
 
 ; test for updateAntiGoals
-!(test (updateAntiGoals &space 0.10 0.20 0.30 0.40) "anti-goals updated")
-!(test (updateAntiGoals &space 0.50 0.50 0.50 0.50) "anti-goals updated")
-!(test (updateAntiGoals &space 0.1 0.2 0.3 0.4) "anti-goals updated")
-!(test (updateAntiGoals &space 0.9 0.8 0.7 0.6) "anti-goals updated")
+!(test (updateAntiGoals &space 0.10 0.20 0.30 0.40) true)
+!(test (updateAntiGoals &space 0.50 0.50 0.50 0.50) true)
+!(test (updateAntiGoals &space 0.1 0.2 0.3 0.4) true)
+!(test (updateAntiGoals &space 0.9 0.8 0.7 0.6) true)
 
 ; test for increment-turn , commented out since it will affect the output of post-update
 (test (increment-turn &space) 1)

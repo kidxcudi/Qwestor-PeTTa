@@ -1,168 +1,81 @@
+; ─────────────────────────────────────────────
+; operators/test/homeostasis-test.metta
+; ─────────────────────────────────────────────
 
 !(import! &self ../../utils/general-helper)
+!(import! &self ../../utils/utils)
 !(import! &self ../appraisal)
 !(import! &self ../decision)
 !(import! &self ../homeostasis)
 
+; ── default-center ───────────────────────────
+!(test (default-center accuracy)   0.70)
+!(test (default-center hallucinate) 0.35)
+!(test (default-center threshold)  0.30)
+!(test (default-center rabbit_hole) 0.28)
 
-; default-center 
-!(test
-    (default-center accuracy)
-    0.70)
+; ── modulator-bounds ─────────────────────────
+!(test (modulator-bounds threshold) (0.20 0.95))
+!(test (modulator-bounds arousal)   (0.10 0.90))
+!(test (modulator-bounds securing)  (0.00 1.00))
 
-!(test
-    (default-center hallucinate)
-    0.35)
+; ── _near-boundary ───────────────────────────
+!(test (_near-boundary 0.05 0.0 1.0 0.05) True)
+!(test (_near-boundary 0.95 0.0 1.0 0.05) True)
+!(test (_near-boundary 0.50 0.0 1.0 0.05) False)
+!(test (_near-boundary 0.01 0.0 1.0 0.05) True)
 
-!(test
-    (default-center threshold)
-    0.30)
+; ── _clamp-range ─────────────────────────────
+!(test (_clamp-range  1.5 0.0 1.0) 1.0)
+!(test (_clamp-range -0.1 0.0 1.0) 0.0)
+!(test (_clamp-range  0.5 0.0 1.0) 0.5)
+!(test (_clamp-range 0.19 0.20 0.95) 0.20)
 
-!(test
-    (default-center rabbit_hole)
-    0.28)
+; ── _contract-value ──────────────────────────
+!(test (_contract-value 0.02 0.0 1.0 0.05 0.10 0.35) 0.053)
+!(test (_contract-value 0.50 0.0 1.0 0.05 0.10 0.35) 0.50)
+!(test (_contract-value 0.97 0.0 1.0 0.05 0.10 0.35) 0.908)
 
-
-; modulator-bounds 
-!(test
-    (modulator-bounds threshold)
-    (0.20 0.95))
-
-!(test
-    (modulator-bounds arousal)
-    (0.10 0.90))
-
-!(test
-    (modulator-bounds securing)
-    (0.00 1.00))
-
-
-; _near-boundary 
-!(test
-    (_near-boundary 0.05 0.0 1.0 0.05)
-    True)
-
-
-!(test
-    (_near-boundary 0.95 0.0 1.0 0.05)
-    True)
-
-!(test
-    (_near-boundary 0.50 0.0 1.0 0.05)
-    False)
-
-!(test
-    (_near-boundary 0.01 0.0 1.0 0.05)
-    True)
-
-
-; _clamp-range
-!(test
-    (_clamp-range 1.5 0.0 1.0)
-    1.0)
-
-!(test
-    (_clamp-range -0.1 0.0 1.0)
-    0.0)
-
-!(test
-    (_clamp-range 0.5 0.0 1.0)
-    0.5)
-
-!(test
-    (_clamp-range 0.19 0.20 0.95)
-    0.20)
-
-
-; _contract-value pulls toward center
-!(test (_contract-value 0.02 0.0 1.0 0.05 0.10 0.35) 
-       0.053)
-
-!(test
-    (_contract-value 0.50 0.0 1.0 0.05 0.10 0.35)
-    0.50)
-
-!(test
-    (_contract-value 0.97 0.0 1.0 0.05 0.10 0.35)
-    0.908)
- 
-
-; homeo-contract-goal updates state
+; ── homeo-contract-goal ──────────────────────
 !(bind! &testSpace (new-space))
 !(addAlpha &testSpace (alpha))
-!(addState &testSpace
-             (state
-               (turn 0)
-               (default-goals)
-               (default-mods)
-               (default-anti-goals)
-               (alpha))
-)
+!(addState &testSpace (state (turn 0) (default-goals) (default-mods) (default-anti-goals) (alpha)))
 
 !(updateGoal &testSpace accuracy 0.02)
-!(test
-    (getGoal &testSpace accuracy)
-    0.02)
+!(test (getGoal &testSpace accuracy) 0.02)
 
-!(homeo-contract-goal &testSpace accuracy 0.0 1.0 0.05 0.10) 
-!(test
-    (getGoal &testSpace accuracy)
-    0.088)
+!(homeo-contract-goal &testSpace accuracy 0.0 1.0 0.05 0.10)
+!(test (getGoal &testSpace accuracy) 0.088)
 
-
-; homeo-contract-goal
 !(updateGoal &testSpace accuracy 0.65)
 !(homeo-contract-goal &testSpace accuracy 0.0 1.0 0.05 0.10)
-!(test
-    (getGoal &testSpace accuracy)
-    0.65)
+!(test (getGoal &testSpace accuracy) 0.65)
 
-; homeo-contract-anti
-
+; ── homeo-contract-anti ──────────────────────
 !(bind! &testSpaceAnti (new-space))
 !(addAlpha &testSpaceAnti (alpha))
-!(addState &testSpaceAnti
-             (state
-               (turn 0)
-               (default-goals)
-               (default-mods)
-               (default-anti-goals)
-               (alpha))
-)
+!(addState &testSpaceAnti (state (turn 0) (default-goals) (default-mods) (default-anti-goals) (alpha)))
 
-; push hallucinate near boundary
 !(let*
-   (
-     ($anti (getAntiGoals &testSpaceAnti))
-     ($hall (antiGoalGet$anti hallucinate))
-     ($red  (antiGoalGet$anti redundant))
-     ($rh   (antiGoalGet$anti rabbit_hole))
-     ($prem (antiGoalGet$anti premature))
-   )
-   ( updateAnti-Goals &testSpaceAnti 0.02 $red $rh $prem)
-)
-!(homeo-contract-anti &testSpaceAnti hallucinate 0.0 1.0 0.05 0.10)
-!(test (antiGoalGet(getAntiGoals &testSpaceAnti) hallucinate) 
-       0.053)
+   (($anti (getAntiGoals &testSpaceAnti))
+    ($hall (antiGoalGet $anti hallucinate))
+    ($red  (antiGoalGet $anti redundant))
+    ($rh   (antiGoalGet $anti rabbit_hole))
+    ($prem (antiGoalGet $anti premature)))
+   (updateAnti-Goals &testSpaceAnti 0.02 $red $rh $prem))
 
-; apply-homeostasis
+!(homeo-contract-anti &testSpaceAnti hallucinate 0.0 1.0 0.05 0.10)
+!(test (antiGoalGet (getAntiGoals &testSpaceAnti) hallucinate) 0.053)
+
+; ── apply-homeostasis (disabled) ─────────────
 !(bind! &testSpaceMain (new-space))
 !(addAlpha &testSpaceMain (alpha))
-!(addState &testSpaceMain
-             (state
-               (turn 0)
-               (default-goals)
-               (default-mods)
-               (default-anti-goals)
-               (alpha))
-)
-!(test (apply-homeostasis &testSpaceMain) ("Homeostasis Disabled"))
-!(test
-    (getGoal &testSpaceMain accuracy)
-    0.70)
+!(addState &testSpaceMain (state (turn 0) (default-goals) (default-mods) (default-anti-goals) (alpha)))
 
-; apply-homeostasis 
+!(test (apply-homeostasis &testSpaceMain) true)
+!(test (getGoal &testSpaceMain accuracy) 0.70)
 
+; ── apply-homeostasis (enabled) ──────────────
 !(bind! &testApplyHomeostasis (new-space))
 !(addAlpha &testApplyHomeostasis (
     (urgency_alpha              0.60)
@@ -189,48 +102,24 @@
     (reflective_think_bonus     0.14)
     (reflective_search_penalty  0.10)
     (intent_margin              0.12)
-    (enable_homeostasis            1)
+    (enable_homeostasis         1)
     (homeostasis_theta_safe     0.55)
     (homeostasis_eta            0.05)
     (homeostasis_alpha_near     0.10)
 ))
 !(addState &testApplyHomeostasis
-    (state
-      (turn 0)
-      (default-goals)
-      (default-mods)
-      (default-anti-goals)
-      ())
-)
-
+    (state (turn 0) (default-goals) (default-mods) (default-anti-goals) ()))
 
 !(updateGoal &testApplyHomeostasis accuracy 0.01)
 !(apply-homeostasis &testApplyHomeostasis)
-
-; accuracy should have been pulled toward 0.70
-; new = (1-0.10)*0.01 + 0.10*0.70 = 0.009 + 0.07 = 0.079
-!(test
-    (getGoal &testApplyHomeostasis accuracy)
-    0.07899999999999999)
-; over_beneficial at default 0.60, theta_safe=0.55
-; 0.60 is interior of [0.55+0.05, 1-0.05] = [0.60, 0.95]
-; right at boundary, so it gets pulled toward 0.60 center
-; new = (1-0.10)*0.60 + 0.10*0.60 = 0.60
-!(test
-    (getGoal &testApplyHomeostasis over_beneficial)
-    0.6000000000000001)
-; testing anti-goals through the main function 
+!(test (getGoal &testApplyHomeostasis accuracy)       0.07899999999999999)
+!(test (getGoal &testApplyHomeostasis over_beneficial) 0.6000000000000001)
 
 !(updateAnti-Goals &testApplyHomeostasis 0.01 0.3 0.3 0.3)
 !(apply-homeostasis &testApplyHomeostasis)
-!(test
-  (antiGoalGet(getAntiGoals &testApplyHomeostasis) hallucinate)
-  0.044)
+!(test (antiGoalGet (getAntiGoals &testApplyHomeostasis) hallucinate) 0.044)
 
-; boundary test
 !(updateGoal &testApplyHomeostasis accuracy 0.05)
-
-!(updateGoal &testApplyHomeostasis novelty 0.99)
+!(updateGoal &testApplyHomeostasis novelty  0.99)
 !(apply-homeostasis &testApplyHomeostasis)
 !(test (getGoal &testApplyHomeostasis novelty) 0.937)
-
