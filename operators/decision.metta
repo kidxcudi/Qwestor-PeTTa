@@ -1,5 +1,4 @@
 !(import! &self ../../utils/constants)
-
 ; ─────────────────────────────────────────────
 ; Helper: read one value from a goal-vector tuple
 ; ─────────────────────────────────────────────
@@ -833,48 +832,66 @@
 ; tested-works
 ; ── main action selection ───────────────────────────────────
 (= (selectAction $scores $intent_type $low_conf $threshold $intent_margin)
+
     (let*
         (
             ($search_score   (get_score $scores act_search))
+            ($_ (println! ("search score: "$search_score)))
+
             ($think_score    (get_score $scores act_think))
+            ($_ (println! ("think score: "$think_score)))
+
             ($diff           (abs-math (- $search_score $think_score)))
+            ($_ (println! ("diff: "$diff)))
+
             ($is_active
                 (and (> $search_score (ACTION-ACTIVE-FLOOR))
                      (> $think_score  (ACTION-ACTIVE-FLOOR))))
+            ($_ (println! ("is active: "$is_active)))
+
             ($is_tie
                 (and $is_active
                      (<= $diff $intent_margin)))
+            ($_ (println! ("is tie: "$is_tie)))
         )
+
         (if $is_tie
+
+            ; ── tie-breaking using intent ──────────────────
             (let*
                 (
-                    ($preferred (get-preferred $intent_type $low_conf $threshold))
-                    ($new_score (+ (+ (max $search_score $think_score) $intent_margin) 0.0001))
-                    ($updated_scores (update_score $scores $preferred $new_score))
-                    ($best_act (best_action $updated_scores))
-                    ($sorted (format-output (sort_scores $updated_scores)))
+                    ($preferred
+                        (get-preferred $intent_type $low_conf $threshold))
+                     ($_ (println! ("preferred: "$preferred)))
+
+                    ($new_score
+                        (+ (+ (max $search_score $think_score)
+                              $intent_margin)
+                           0.0001))
+                    ($_ (println! ("new_score: "$new_score)))
+
+                    ($updated_scores
+                        (update_score $scores $preferred $new_score))
+                    ($_ (println! ("updated scores: "$updated_scores)))
+
+                    ($best_act  (best_action $updated_scores))
+ 
+                 )
+
+                (   
+                    (best_action $updated_scores)
+                    (sort_scores $updated_scores)
+ 
                 )
-                ($best_act $sorted)
             )
-            (let*
-                (
-                    ($best_act (best_action $scores))
-                    ($sorted (format-output (sort_scores $scores)))
-                )
-                ($best_act $sorted)
+
+            (
+               (best_action $scores)
+               (sort_scores $scores)      
             )
         )
     )
 )
-
-;; Convert (value action) to (action value) and filter blocked
-(= (format-output ()) ())
-(= (format-output $list)
-   (let* ((($head $rest) (decons $list))
-          (($v $a) $head))
-     (if (> $v (ACTION-ACTIVE-FLOOR))
-         (cons ($a $v) (format-output $rest))
-         (format-output $rest))))
 ; ─────────────────────────────────────────────
 ; updateAntiGoals — replace the anti-goal block
 ; ─────────────────────────────────────────────
@@ -1063,7 +1080,7 @@
        ($amb  (find_by_key ambiguity $appraisal))
        ($ux   (find_by_key user_expertise $appraisal))
        ($thr  (find_by_key threshold $appraisal))
-       ($fw   (find_by_key failure_wariness $appraisal))
+       ($fw (getMod $space m_failure_wariness))
        ($lc   (- 1.0 $thr))
        ($res  (find_by_key resolution $appraisal))
        ($app  (find_by_key approach $appraisal))

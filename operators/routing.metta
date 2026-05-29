@@ -1,8 +1,9 @@
+!(import! &self ../../utils/utils)
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; MetaMo Routing Guards for PeTTa-Qwestor
 ;; Refactored for deterministic list processing using decons.
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-!(import! &self ../../utils/utils)
+
 ;; ============================================================
 ;; 1. CONSTANTS
 ;; =================================;; ============================================================
@@ -58,11 +59,11 @@
           ($_ (println! ("a: "$amb)))
           ($urgent (ctx-val $ctx urgent_flag))
           ($_ (println! ("u: "$urgent)))
-          ($min (ctx-val $ctx decompose_min_complexity))
+          ($min (getAlpha $space decompose_min_complexity))
           ($_ (println! ("min: "$min)))
-          ($u_min (ctx-val $ctx decompose_urgent_min_complexity))
+          ($u_min (getAlpha $space decompose_urgent_min_complexity))
           ($_ (println! ("u_min: "$u_min)))
-          ($max_amb (ctx-val $ctx decompose_max_ambiguity))
+          ($max_amb (getAlpha $space decompose_max_ambiguity))
           ($_ (println! ("max_amb: "$max_amb)))
           ($thr (if (== $urgent true) $u_min $min))
           ($_ (println! ("thr: "$thr)))
@@ -75,7 +76,7 @@
           ($_ (println! ("final: "$final_s1)))
 
           ($curr (get-action-score $s1 act_decompose)))
-     (if (== $curr (ACTION_BLOCKED_SCORE)) $s1
+      (if (== $curr (ACTION_BLOCKED_SCORE)) $s1
          (let* (($task (ctx-val $ctx needs_task_plan))
                 ($_ (println! ("task: "$task)))
                 ($refl (ctx-val $ctx reflective_intent))
@@ -83,6 +84,7 @@
                 ($ext (ctx-val $ctx needs_external_evidence))
                 ($_ (println! ("evidence: "$ext)))
                 )
+                
            (if (and (< $task 0.45) (not (and (and (>= $cx 0.78) (<= $amb 0.35)) (>= $refl 0.75))))
                (set-action-score $s1 act_decompose (ACTION_BLOCKED_SCORE))
                (let* (($s2 (if (and (>= $ext 0.75) (<= $task 0.55))
@@ -91,7 +93,13 @@
                                (adjust-action-score $s2 act_decompose 0.10) $s2)))
                  (if (and (<= $task 0.18) (< $cx 0.55))
                      (adjust-action-score $s3 act_decompose -0.30)
-                     $s3)))))))
+                     $s3)
+               )
+           )
+          )
+     )
+    )
+)
 
 ;
 ;; GUARD: SEARCH & SYNTHESIZE LOCAL
@@ -114,13 +122,13 @@
                    (let* (($b1 (adjust-action-score $scores act_search 0.30))
                           ($bonus (if (<= $task 0.45) 0.12 0.0)))
                      (adjust-action-score $b1 act_search $bonus))
-                   (if (and (<= $ext 0.22) (== $verify false))
+                   (if (and (<= $ext 0.22) (== $verify 0))
                        (adjust-action-score $scores act_search -0.18)
                        $scores)))
           ;; Synthesize adjustments
           ($s2 (if (>= $multi 0.65)
                    (adjust-action-score $s1 act_synthesize 0.20)
-                   (if (and (< $multi 0.65) (== $verify false))
+                   (if (and (< $multi 0.65) (== $verify 0))
                        (set-action-score $s1 act_synthesize (ACTION_BLOCKED_SCORE))
                        $s1)))
           ($s3 (if (and (>= $task 0.70) (>= $task $multi))
@@ -174,24 +182,40 @@
 ;; Decision: Block verify if ambiguity is too high or request is absent.
 (= (guard-verify $scores $ctx $space)
    (let* (($amb (ctx-val $ctx ambiguity))
+          ($_ (println! ("amb: "$amb)))
+
           ($thr (ctx-val $ctx threshold))
+          ($_ (println! ("thr: "$thr)))
+
           ($low   (- 1.0 $thr))
+          ($_ (println! ("low: "$low)))
+
           ($fw (ctx-val $ctx failure_wariness))
+
+          ($_ (println! ("fw: "$fw)))
+
           ($verify (ctx-val $ctx verify_request))
+          ($_ (println! ("verify: "$verify)))
+
           ($cx (ctx-val $ctx complexity))
+          ($_ (println! ("cx: "$cx)))
+
           ($intent (ctx-val $ctx intent_type))
+          ($_ (println! ("intent: "$intent)))
+
+          ;; Core block
           ($s1 (if (>= $amb 0.85)
                    (set-action-score $scores act_verify (ACTION_BLOCKED_SCORE))
-                   (if (not (or (== $verify true) (or (and (>= $thr 0.55) (>= $low 0.40)) (>= $fw 0.45))))
+                   (if (not (or (== $verify 1) (or (and (>= $thr 0.55) (>= $low 0.40)) (>= $fw 0.45))))
                        (set-action-score $scores act_verify (ACTION_BLOCKED_SCORE))
                        $scores)))
           ($curr (get-action-score $s1 act_verify)))
      (if (== $curr (ACTION_BLOCKED_SCORE)) $s1
-         (let* (($s2 (if (== $verify true)
+         (let* (($s2 (if (== $verify 1)
                          (let* (($b1 (adjust-action-score $s1 act_verify 0.45)))
                            (adjust-action-score $b1 act_synthesize -0.35))
                          $s1)))
-           (if (and (and (== $verify false) (>= $cx 0.70)) (and (<= $amb 0.65) (or (== $intent mixed) (== $intent reflective))))
+           (if (and (and (== $verify 0) (>= $cx 0.70)) (and (<= $amb 0.65) (or (== $intent mixed) (== $intent reflective))))
                (adjust-action-score $s2 act_verify -0.20)
                $s2)))))
 
@@ -199,29 +223,38 @@
 ;; Decision: Bypass planning for simple, high-familiarity inputs.
 (= (guard-fast-lane $scores $ctx $space)
    (let* (($cx (ctx-val $ctx complexity))
+          ($_ (println! ("cx: "$cx)))
           ($amb (ctx-val $ctx ambiguity))
+          ($_ (println! ("amb: "$amb)))
           ($th_s (ctx-val $ctx threshold_signal))
+          ($_ (println! ("th_s: "$th_s)))
           ($fail_s (ctx-val $ctx failure_signal))
+          ($_ (println! ("fail_s: "$fail_s)))
           ($fam_s (ctx-val $ctx familiarity_signal))
+          ($_ (println! ("fam_s: "$fam_s)))
+          
           ($thr (ctx-val $ctx threshold))
-          ($low (ctx-val $ctx low_confidence))
+          ($_ (println! ("thr: "$thr)))
+          ($low   (- 1.0 $thr))
+          ($_ (println! ("low: "$low)))
           ($verify (ctx-val $ctx verify_request))
-          ($help (ctx-val $ctx help_short))
+          ($_ (println! ("verify: "$verify)))
           ;; Ultra fast trigger
-          ($s1 (if (and (and (<= $cx 0.30) (and (<= $amb 0.30) (<= $th_s 0.25))) 
-                        (and (and (<= $fail_s 0.25) (>= $fam_s 0.70)) 
-                             (and (<= $low 0.35) (== $verify false))))
+          ($s1 (if (and (and (<= $cx 0.30) (and (<= $amb 0.30) (<= $th_s 0.25))) (and (and (<= $fail_s 0.25) (>= $fam_s 0.70)) (and (<= $low 0.35) (== $verify 0))))
                    (let* (($b1 (set-action-score $scores act_verify (ACTION_BLOCKED_SCORE)))
                           ($b2 (set-action-score $b1 act_search (ACTION_BLOCKED_SCORE)))
                           ($b3 (set-action-score $b2 act_clarify (ACTION_BLOCKED_SCORE)))
                           ($b4 (set-action-score $b3 act_think (ACTION_BLOCKED_SCORE))))
                      (adjust-action-score $b4 act_respond 0.60))
-                   $scores)))
-     (if (and (and (<= $cx 0.45) (and (<= $amb 0.35) (<= $th_s 0.20))) 
-              (and (and (<= $low 0.30) (>= $fam_s 0.80)) 
-                   (and (>= $help 0.55) (== $verify false))))
+                   $scores))
+          ($_ (println! ("s1: "$s1)))
+          ($help (ctx-val $ctx help_short) ) 
+          ($_ (println! ("help: "$help))))
+     (if (and (and (<= $cx 0.45) (and (<= $amb 0.35) (<= $th_s 0.20))) (and (and (<= $low 0.30) (>= $fam_s 0.80)) (and (>= $help 0.55) (== $verify 0))))
          (let* (($b1 (set-action-score $s1 act_clarify (ACTION_BLOCKED_SCORE)))
-                ($b2 (set-action-score $b1 act_search (ACTION_BLOCKED_SCORE))))
+                ($_ (println! ("b1: "$b1)))
+                ($b2 (set-action-score $b1 act_search (ACTION_BLOCKED_SCORE)))
+                ($_ (println! ("b1: "$b1))))
            (adjust-action-score $b2 act_respond 0.40))
          $s1)))
 

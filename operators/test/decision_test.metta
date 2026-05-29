@@ -24,7 +24,7 @@
     (act_synthesize -100000000)
   )
   factual 0.35 0.44 0.03)
-  (act_search ((act_think 0.7) (act_search 0.7501))))
+  (act_search ((-100000000 act_clarify) (-100000000 act_decompose) (-100000000 act_respond) (-100000000 act_synthesize) (-100000000 act_verify) (0.7 act_think) (0.7501 act_search))))
 
 !(test (selectAction 
   (
@@ -37,7 +37,7 @@
     (act_synthesize -100000000)
   )
   factual 0.35 0.44 0.03)
-  (act_search ((act_think 0.6) (act_search 0.9))))
+  (act_search ((-100000000 act_clarify) (-100000000 act_decompose) (-100000000 act_respond) (-100000000 act_synthesize) (-100000000 act_verify) (0.6 act_think) (0.9 act_search))))
 
 !(test (selectAction 
   (
@@ -50,7 +50,7 @@
     (act_synthesize -100000000)
   )
   reflective 0.20 0.40 0.05)
-  (act_think ((act_search 0.8) (act_think 0.8501000000000001))))
+  (act_think ((-100000000 act_clarify) (-100000000 act_decompose) (-100000000 act_respond) (-100000000 act_synthesize) (-100000000 act_verify) (0.8 act_search) (0.8501000000000001 act_think))))
 
 ; test for goalWeight calculation 
 !(test (goalWeight &space) ((efficiency 0.44772) (accuracy 0.6256599999999999) (success_moderate 1.02) (knowledge 0.41340000000000005) (novelty 0.3726) (success_breakthrough 0.37839999999999996) (coherence 0.5655) (originality 0.3504) (social 0.43210000000000004) (help_short 0.5142500000000001) (help_long 0.405) (over_beneficial 0.591) (over_safety 0.6174999999999999) (over_honesty 0.7214999999999999)))

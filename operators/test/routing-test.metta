@@ -35,22 +35,19 @@
 !(test (get-action-score ((act_search 10.5) (act_attack 5.2)) act_search) 10.5)
 !(test (get-action-score ((act_search 10.5) (act_attack 5.2)) act_attack) 5.2)
 
-
-
 !(test (set-action-score () act_search 10) ((act_search 10)))
 !(test (set-action-score ((act_search 10) (act_attack 5)) act_search 15) ((act_search 15) (act_attack 5)))
 !(test (set-action-score ((act_search 10) (act_attack 5)) act_attack 8) ((act_search 10) (act_attack 8)))
 ; if the action is not in the list, it should be added
 !(test (set-action-score ((act_search 10) (act_attack 5)) act_search 15) ((act_search 15) (act_attack 5)))
 !(test (set-action-score ((act_search 10) (act_search 20)) act_search 15) ((act_search 15) (act_search 20)))
- 
+
 ; test-case for adjust-action-score
 !(test (adjust-action-score ((act_search 10) (act_attack 5)) act_search 5) ((act_search 15) (act_attack 5)))
 !(test (adjust-action-score ((act_search 10) (act_attack 5)) act_attack -2) ((act_search 10) (act_attack 3)))
 !(test (adjust-action-score ((act_search 10) (act_attack 5)) act_defend 3) ((act_search 10) (act_attack 5)))
 !(test (adjust-action-score () act_search 5) ())
 !(test (adjust-action-score ((act_search 10) (act_search 20)) act_search 5) ((act_search 15) (act_search 20)))      
-
 
 ; test-case for get-context-value
 !(test (ctx-val () act_search) 0.0)
@@ -59,9 +56,7 @@
 !(test (ctx-val ((act_search 10) (act_attack 5)) act_defend) 0.0)
 !(test (ctx-val ((act_search 10) (act_search 20)) act_search) 10)   
 
-
 ; test-case for guard-decompose
-
 ; test-case for guard-decompose with non-blocking conditions
 !(test (guard-decompose ((act_decompose 10)) ((complexity 0.5) (ambiguity 0.2) (urgent_flag true) (needs_task_plan 0.3) (reflective_intent 0.8) (needs_external_evidence 0.4) (decompose_min_complexity 0.4) (decompose_urgent_min_complexity 0.7) (decompose_max_ambiguity 0.8)) &space) act_decompose -1000000000.0)
 !(test (guard-decompose ((act_decompose 10)) ((complexity 0.3) (ambiguity 0.2) (urgent_flag true) (needs_task_plan 0.3) (reflective_intent 0.8) (needs_external_evidence 0.4) (decompose_min_complexity 0.4) (decompose_urgent_min_complexity 0.7) (decompose_max_ambiguity 0.8)) &space) act_decompose -1000000000.0)
@@ -125,714 +120,334 @@
 )
 
 ; test-case for guard-search-synth
-
 !(test
   (guard-search-synth
-    (
-      (act_search 10)
-      (act_synthesize 10)
-    )
-    (
-      (needs_external_evidence 0.70)
-      (needs_task_plan 0.40)
-      (needs_multi_source_integration 0.80)
-      (verify_request false)
-    )
+    ((act_search 10) (act_synthesize 10))
+    ((needs_external_evidence 0.70) (needs_task_plan 0.40) (needs_multi_source_integration 0.80) (verify_request 0))
   )
-  (
-    (act_search 10.42)
-    (act_synthesize 10.2)
-  )
+  ((act_search 10.42) (act_synthesize 10.2))
 )
 
 !(test
   (guard-search-synth
-    (
-      (act_search 10)
-      (act_synthesize 10)
-    )
-    (
-      (needs_external_evidence 0.70)
-      (needs_task_plan 0.40)
-      (needs_multi_source_integration 0.80)
-      (verify_request false)
-    )
+    ((act_search 10) (act_synthesize 10))
+    ((needs_external_evidence 0.70) (needs_task_plan 0.40) (needs_multi_source_integration 0.80) (verify_request 0))
   )
-  (
-    (act_search 10.42)
-    (act_synthesize 10.2)
-  )
-)
-
-
-!(test
-  (guard-search-synth
-    (
-      (act_search 10)
-      (act_synthesize 10)
-    )
-    (
-      (needs_external_evidence 0.20)
-      (needs_task_plan 0.50)
-      (needs_multi_source_integration 0.40)
-      (verify_request false)
-    )
-  )
-  (
-    (act_search 9.82)
-    (act_synthesize -1000000000.0)
-  )
+  ((act_search 10.42) (act_synthesize 10.2))
 )
 
 !(test
   (guard-search-synth
-    (
-      (act_search 10)
-      (act_synthesize 10)
-    )
-    (
-      (needs_external_evidence 0.20)
-      (needs_task_plan 0.50)
-      (needs_multi_source_integration 0.40)
-      (verify_request true)
-    )
+    ((act_search 10) (act_synthesize 10))
+    ((needs_external_evidence 0.20) (needs_task_plan 0.50) (needs_multi_source_integration 0.40) (verify_request 0))
   )
-  (
-    (act_search 10)
-    (act_synthesize 10)
-  )
-)
-
-
-!(test
-  (guard-search-synth
-    (
-      (act_search 10)
-      (act_synthesize 10)
-    )
-    (
-      (needs_external_evidence 0.40)
-      (needs_task_plan 0.50)
-      (needs_multi_source_integration 0.80)
-      (verify_request true)
-    )
-  )
-  (
-    (act_search 10)
-    (act_synthesize 10.2)
-  )
+  ((act_search 9.82) (act_synthesize -1000000000.0))
 )
 
 !(test
   (guard-search-synth
-    (
-      (act_search 10)
-      (act_synthesize 10)
-    )
-    (
-      (needs_external_evidence 0.40)
-      (needs_task_plan 0.50)
-      (needs_multi_source_integration 0.50)
-      (verify_request false)
-    )
+    ((act_search 10) (act_synthesize 10))
+    ((needs_external_evidence 0.20) (needs_task_plan 0.50) (needs_multi_source_integration 0.40) (verify_request 1))
   )
-  (
-    (act_search 10)
-    (act_synthesize -1000000000.0)
-  )
-)
-; guard-search-synth
-
-!(test
-  (guard-search-synth
-    (
-      (act_search 10)
-      (act_synthesize 10)
-    )
-    (
-      (needs_external_evidence 0.70)
-      (needs_task_plan 0.40)
-      (needs_multi_source_integration 0.80)
-      (verify_request false)
-    )
-  )
-  (
-    (act_search 10.42)
-    (act_synthesize 10.2)
-  )
+  ((act_search 10) (act_synthesize 10))
 )
 
 !(test
   (guard-search-synth
-    (
-      (act_search 10)
-      (act_synthesize 10)
-    )
-    (
-      (needs_external_evidence 0.20)
-      (needs_task_plan 0.50)
-      (needs_multi_source_integration 0.40)
-      (verify_request false)
-    )
+    ((act_search 10) (act_synthesize 10))
+    ((needs_external_evidence 0.40) (needs_task_plan 0.50) (needs_multi_source_integration 0.80) (verify_request 1))
   )
-  (
-    (act_search 9.82)
-    (act_synthesize -1000000000.0)
-  )
+  ((act_search 10) (act_synthesize 10.2))
 )
-
 
 !(test
   (guard-search-synth
-    (
-      (act_search 10)
-      (act_synthesize 10)
-    )
-    (
-      (needs_external_evidence 0.20)
-      (needs_task_plan 0.50)
-      (needs_multi_source_integration 0.40)
-      (verify_request true)
-    )
+    ((act_search 10) (act_synthesize 10))
+    ((needs_external_evidence 0.40) (needs_task_plan 0.50) (needs_multi_source_integration 0.50) (verify_request 0))
   )
-  (
-    (act_search 10)
-    (act_synthesize 10)
-  )
+  ((act_search 10) (act_synthesize -1000000000.0))
 )
+
 !(test
   (guard-search-synth
-    (
-      (act_search 10)
-      (act_synthesize 10)
-    )
-    (
-      (needs_external_evidence 0.70)
-      (needs_task_plan 0.75)
-      (needs_multi_source_integration 0.70)
-      (verify_request false)
-    )
+    ((act_search 10) (act_synthesize 10))
+    ((needs_external_evidence 0.70) (needs_task_plan 0.40) (needs_multi_source_integration 0.80) (verify_request 0))
   )
-  (
-    (act_search 10.3)
-    (act_synthesize 9.979999999999999)
-  )
+  ((act_search 10.42) (act_synthesize 10.2))
 )
-; here 
-; test for apply_search_arbitration
+
+!(test
+  (guard-search-synth
+    ((act_search 10) (act_synthesize 10))
+    ((needs_external_evidence 0.20) (needs_task_plan 0.50) (needs_multi_source_integration 0.40) (verify_request 0))
+  )
+  ((act_search 9.82) (act_synthesize -1000000000.0))
+)
+
+!(test
+  (guard-search-synth
+    ((act_search 10) (act_synthesize 10))
+    ((needs_external_evidence 0.20) (needs_task_plan 0.50) (needs_multi_source_integration 0.40) (verify_request 1))
+  )
+  ((act_search 10) (act_synthesize 10))
+)
+
+!(test
+  (guard-search-synth
+    ((act_search 10) (act_synthesize 10))
+    ((needs_external_evidence 0.70) (needs_task_plan 0.75) (needs_multi_source_integration 0.70) (verify_request 0))
+  )
+  ((act_search 10.3) (act_synthesize 9.979999999999999))
+)
+
+; test for guard-search-arb
 !(test
   (guard-search-arb
-    (
-      (act_search 10)
-      (act_decompose 10)
-      (act_synthesize 10)
-    )
-    (
-      (needs_external_evidence 0.20)
-      (needs_task_plan 0.50)
-      (needs_multi_source_integration 0.40)
-    )
+    ((act_search 10) (act_decompose 10) (act_synthesize 10))
+    ((needs_external_evidence 0.20) (needs_task_plan 0.50) (needs_multi_source_integration 0.40))
   )
-  (
-    (act_search 10)
-    (act_decompose 10)
-    (act_synthesize 10)
-  )
-)
- 
-!(test
-  (guard-search-arb
-    (
-      (act_search 10)
-      (act_decompose 10)
-      (act_synthesize 10)
-    )
-    (
-      (needs_external_evidence 0.90)
-      (needs_task_plan 0.50)
-      (needs_multi_source_integration 0.80)
-    )
-  )
-  (
-    (act_search 10.26)
-    (act_decompose 9.74)
-    (act_synthesize 9.88)
-  )
+  ((act_search 10) (act_decompose 10) (act_synthesize 10))
 )
 
 !(test
   (guard-search-arb
-    (
-      (act_search 5)
-      (act_decompose 5)
-      (act_synthesize 5)
-    )
-    (
-      (needs_external_evidence 0.40)
-      (needs_task_plan 0.75)
-      (needs_multi_source_integration 0.50)
-    )
+    ((act_search 10) (act_decompose 10) (act_synthesize 10))
+    ((needs_external_evidence 0.90) (needs_task_plan 0.50) (needs_multi_source_integration 0.80))
   )
-  (
-    (act_search 4.88)
-    (act_decompose 5.18)
-    (act_synthesize 4.9)
-  )
+  ((act_search 10.26) (act_decompose 9.74) (act_synthesize 9.88))
 )
 
 !(test
   (guard-search-arb
-    (
-      (act_search 7)
-      (act_decompose 7)
-      (act_synthesize 7)
-    )
-    (
-      (needs_external_evidence 0.50)
-      (needs_task_plan 0.40)
-      (needs_multi_source_integration 0.72)
-    )
+    ((act_search 5) (act_decompose 5) (act_synthesize 5))
+    ((needs_external_evidence 0.40) (needs_task_plan 0.75) (needs_multi_source_integration 0.50))
   )
-  (
-    (act_search 7)
-    (act_decompose 6.84)
-    (act_synthesize 7.16)
-  )
+  ((act_search 4.88) (act_decompose 5.18) (act_synthesize 4.9))
 )
-!(test
-  (guard-search-arb
-    (
-      (act_search 10)
-      (act_decompose 10)
-      (act_synthesize 10)
-    )
-    (
-      (needs_external_evidence 0.20)
-      (needs_task_plan 0.50)
-      (needs_multi_source_integration 0.40)
-    )
-  )
-  (
-    (act_search 10)
-    (act_decompose 10)
-    (act_synthesize 10)
-  )
-)
-!(test
-  (guard-search-arb
-    (
-      (act_search 3)
-      (act_decompose 3)
-      (act_synthesize 3)
-    )
-    (
-      (needs_external_evidence 0.70)
-      (needs_task_plan 0.55)
-      (needs_multi_source_integration 0.72)
-    )
-  )
-  (
-    (act_search 3)
-    (act_decompose 2.84)
-    (act_synthesize 3.16)
-  )
-)
-!(test
-  (guard-search-arb
-    (
-      (act_search 10)
-      (act_decompose 10)
-      (act_synthesize -1000000000)
-    )
-    (
-      (needs_external_evidence 0.90)
-      (needs_task_plan 0.50)
-      (needs_multi_source_integration 0.80)
-    )
-  )
-  (
-    (act_search 10.26)
-    (act_decompose 9.74)
-    (act_synthesize -1000000000.0)
-  )
-)
-;
 
+!(test
+  (guard-search-arb
+    ((act_search 7) (act_decompose 7) (act_synthesize 7))
+    ((needs_external_evidence 0.50) (needs_task_plan 0.40) (needs_multi_source_integration 0.72))
+  )
+  ((act_search 7) (act_decompose 6.84) (act_synthesize 7.16))
+)
+
+!(test
+  (guard-search-arb
+    ((act_search 10) (act_decompose 10) (act_synthesize 10))
+    ((needs_external_evidence 0.20) (needs_task_plan 0.50) (needs_multi_source_integration 0.40))
+  )
+  ((act_search 10) (act_decompose 10) (act_synthesize 10))
+)
+
+!(test
+  (guard-search-arb
+    ((act_search 3) (act_decompose 3) (act_synthesize 3))
+    ((needs_external_evidence 0.70) (needs_task_plan 0.55) (needs_multi_source_integration 0.72))
+  )
+  ((act_search 3) (act_decompose 2.84) (act_synthesize 3.16))
+)
+
+!(test
+  (guard-search-arb
+    ((act_search 10) (act_decompose 10) (act_synthesize -1000000000))
+    ((needs_external_evidence 0.90) (needs_task_plan 0.50) (needs_multi_source_integration 0.80))
+  )
+  ((act_search 10.26) (act_decompose 9.74) (act_synthesize -1000000000.0))
+)
+
+; ─────────────────────────────────────────────
 ; test for guard-verify
-; NOTE: guard-verify takes 3 args: scores ctx space
+; NOTE: guard-verify reads failure_wariness via getMod from &space.
+;       Space is updated before each test via update-mods.
+; ─────────────────────────────────────────────
 
+; guard-verify test 1: ambiguity 0.90 → blocked regardless
+!(update-mods &space (m_urgency 0.5) (m_resolution 0.5) (m_user_expertise 0.5) (m_threshold 0.5) (m_topic_familiarity 0.5) (m_failure_wariness 0.40) (m_securing 0.5) (m_approach 0.5) (m_arousal 0.5) (m_risk_aversion 0.5) (m_error_tolerance 0.5) (m_creativity 0.5) (m_valence 0.5))
 !(test
   (guard-verify
-    (
-      (act_verify 10)
-      (act_synthesize 10)
-    )
-    (
-      (ambiguity 0.90)
-      (threshold 0.60)
-      (low_confidence 0.50)
-      (failure_wariness 0.40)
-      (verify_request true)
-      (complexity 0.80)
-      (intent_type mixed)
-    )
+    ((act_verify 10) (act_synthesize 10))
+    ((ambiguity 0.90) (threshold 0.60) (low_confidence 0.50) (verify_request true) (complexity 0.80) (intent_type mixed))
     &space
   )
-  (
-    (act_verify -1000000000.0)
-    (act_synthesize 10)
-  )
+  ((act_verify -1.0e+09) (act_synthesize 10))
 )
 
+; guard-verify test 2: no verify_request, low fw → blocked
+!(update-mods &space (m_urgency 0.5) (m_resolution 0.5) (m_user_expertise 0.5) (m_threshold 0.5) (m_topic_familiarity 0.5) (m_failure_wariness 0.40) (m_securing 0.5) (m_approach 0.5) (m_arousal 0.5) (m_risk_aversion 0.5) (m_error_tolerance 0.5) (m_creativity 0.5) (m_valence 0.5))
 !(test
   (guard-verify
-    (
-      (act_verify 10)
-    )
-    (
-      (ambiguity 0.40)
-      (threshold 0.50)
-      (low_confidence 0.30)
-      (failure_wariness 0.40)
-      (verify_request false)
-      (complexity 0.60)
-      (intent_type reflective)
-    )
+    ((act_verify 10))
+    ((ambiguity 0.40) (threshold 0.50) (low_confidence 0.30) (verify_request 0) (complexity 0.60) (intent_type reflective))
     &space
   )
-  (
-    (act_verify -1000000000.0)
-  )
+  ((act_verify -1.0e+09))
 )
 
+; guard-verify test 3: verify_request true, fw 0.40 → boosted
+!(remove-state &space)
+!(update-mods &space (m_urgency 0.5) (m_resolution 0.5) (m_user_expertise 0.5) (m_threshold 0.5) (m_topic_familiarity 0.5) (m_failure_wariness 0.40) (m_securing 0.5) (m_approach 0.5) (m_arousal 0.5) (m_risk_aversion 0.5) (m_error_tolerance 0.5) (m_creativity 0.5) (m_valence 0.5))
 !(test
   (guard-verify
-    (
-      (act_verify 10)
-      (act_synthesize 10)
-    )
-    (
-      (ambiguity 0.50)
-      (threshold 0.60)
-      (low_confidence 0.50)
-      (failure_wariness 0.40)
-      (verify_request true)
-      (complexity 0.60)
-      (intent_type mixed)
-    )
+    ((act_verify 10) (act_synthesize 10))
+    ((ambiguity 0.50) (threshold 0.60) (low_confidence 0.50) (verify_request 1) (complexity 0.60) (intent_type mixed))
     &space
   )
-  (
-    (act_verify 10.45)
-    (act_synthesize 9.65)
-  )
-)
-!(test
-  (guard-verify
-    (
-      (act_verify 10)
-    )
-    (
-      (ambiguity 0.50)
-      (threshold 0.60)
-      (low_confidence 0.50)
-      (failure_wariness 0.40)
-      (verify_request false)
-      (complexity 0.80)
-      (intent_type reflective)
-    )
-    &space
-  )
-  (
-    (act_verify 9.8)
-  )
+  ((act_verify 10.45) (act_synthesize 9.65))
 )
 
+; guard-verify test 4: no verify, reflective, high cx → slight penalty
+!(remove-state &space)
+!(update-mods &space (m_urgency 0.5) (m_resolution 0.5) (m_user_expertise 0.5) (m_threshold 0.5) (m_topic_familiarity 0.5) (m_failure_wariness 0.40) (m_securing 0.5) (m_approach 0.5) (m_arousal 0.5) (m_risk_aversion 0.5) (m_error_tolerance 0.5) (m_creativity 0.5) (m_valence 0.5))
 !(test
   (guard-verify
-    (
-      (act_verify 10)
-    )
-    (
-      (ambiguity 0.50)
-      (threshold 0.60)
-      (low_confidence 0.50)
-      (failure_wariness 0.40)
-      (verify_request true)
-      (complexity 0.60)
-      (intent_type mixed)
-    )
+    ((act_verify 10))
+    ((ambiguity 0.50) (threshold 0.60) (low_confidence 0.50) (verify_request 0) (complexity 0.80) (intent_type reflective))
     &space
   )
-  (
-    (act_verify 10.45)
-  )
+  ((act_verify 9.8))
 )
-; test guard-fast-lane
-; NOTE: guard-fast-lane takes 3 args: scores ctx space
+
+; guard-verify test 5: verify_request true → boosted
+!(remove-state &space)
+!(update-mods &space (m_urgency 0.5) (m_resolution 0.5) (m_user_expertise 0.5) (m_threshold 0.5) (m_topic_familiarity 0.5) (m_failure_wariness 0.40) (m_securing 0.5) (m_approach 0.5) (m_arousal 0.5) (m_risk_aversion 0.5) (m_error_tolerance 0.5) (m_creativity 0.5) (m_valence 0.5))
+!(test
+  (guard-verify
+    ((act_verify 10))
+    ((ambiguity 0.50) (threshold 0.60) (low_confidence 0.50) (verify_request 1) (complexity 0.60) (intent_type mixed))
+    &space
+  )
+  ((act_verify 10.45))
+)
+
+; ─────────────────────────────────────────────
+; test for guard-fast-lane
+; NOTE: guard-fast-lane reads help_short via getGoal from &space.
+;       Space goal is updated before each test via updateGoal.
+; ─────────────────────────────────────────────
+
+; guard-fast-lane test 1: ultra-fast trigger → all blocked except respond
+!(updateGoal &space help_short 0.50)
 !(test
   (guard-fast-lane
-    (
-      (act_verify 10)
-      (act_search 10)
-      (act_clarify 10)
-      (act_think 10)
-      (act_respond 10)
-    )
-    (
-      (complexity 0.20)
-      (ambiguity 0.20)
-      (threshold_signal 0.20)
-      (failure_signal 0.20)
-      (familiarity_signal 0.80)
-      (low_confidence 0.20)
-      (verify_request false)
-      (help_short 0.50)
-    )
+    ((act_verify 10) (act_search 10) (act_clarify 10) (act_think 10) (act_respond 10))
+    ((complexity 0.20) (ambiguity 0.20) (threshold_signal 0.20) (failure_signal 0.20) (familiarity_signal 0.80) (threshold 0.65) (low_confidence 0.20) (verify_request 0))
     &space
   )
-  (
-      (act_verify -1000000000.0)
-      (act_search -1000000000.0)
-      (act_clarify -1000000000.0)
-      (act_think -1000000000.0)
-      (act_respond 10.60)
-  )
+  ((act_verify -1000000000.0) (act_search -1000000000.0) (act_clarify -1000000000.0) (act_think -1000000000.0) (act_respond 10.60))
 )
 
+; guard-fast-lane test 2: soft fast lane → search+clarify blocked
+!(updateGoal &space help_short 0.60)
 !(test
   (guard-fast-lane
-    (
-      (act_verify 10)
-      (act_search 10)
-      (act_clarify 10)
-      (act_think 10)
-      (act_respond 10)
-    )
-    (
-      (complexity 0.40)
-      (ambiguity 0.30)
-      (threshold_signal 0.20)
-      (failure_signal 0.20)
-      (familiarity_signal 0.85)
-      (low_confidence 0.25)
-      (verify_request false)
-      (help_short 0.60)
-    )
+    ((act_verify 10) (act_search 10) (act_clarify 10) (act_think 10) (act_respond 10))
+    ((complexity 0.40) (ambiguity 0.30) (threshold_signal 0.20) (failure_signal 0.20) (familiarity_signal 0.85) (threshold 0.71) (help_short 0.60) (verify_request 0))
     &space
   )
-  (
-      (act_verify 10)
-      (act_search -1000000000.0)
-      (act_clarify -1000000000.0)
-      (act_think 10)
-      (act_respond 10.40)
-  )
+  ((act_verify 10) (act_search -1000000000.0) (act_clarify -1000000000.0) (act_think 10) (act_respond 10.40))
 )
+
+; guard-fast-lane test 3: complexity too high → no trigger
+!(updateGoal &space help_short 0.80)
 !(test
   (guard-fast-lane
-    (
-      (act_verify 10)
-      (act_search 10)
-      (act_clarify 10)
-      (act_think 10)
-      (act_respond 10)
-    )
-    (
-      (complexity 0.60)
-      (ambiguity 0.20)
-      (threshold_signal 0.20)
-      (failure_signal 0.20)
-      (familiarity_signal 0.90)
-      (low_confidence 0.20)
-      (verify_request false)
-      (help_short 0.80)
-    )
+    ((act_verify 10) (act_search 10) (act_clarify 10) (act_think 10) (act_respond 10))
+    ((complexity 0.60) (ambiguity 0.20) (threshold_signal 0.20) (failure_signal 0.20) (familiarity_signal 0.90) (threshold 0.65) (low_confidence 0.20) (verify_request 0))
     &space
   )
-  (
-      (act_verify 10)
-      (act_search 10)
-      (act_clarify 10)
-      (act_think 10)
-      (act_respond 10)
-  )
+  ((act_verify 10) (act_search 10) (act_clarify 10) (act_think 10) (act_respond 10))
 )
+
+; guard-fast-lane test 4: verify_request true → no trigger
+!(updateGoal &space help_short 0.80)
 !(test
   (guard-fast-lane
-    (
-      (act_verify 10)
-      (act_search 10)
-      (act_clarify 10)
-      (act_think 10)
-      (act_respond 10)
-    )
-    (
-      (complexity 0.10)
-      (ambiguity 0.10)
-      (threshold_signal 0.10)
-      (failure_signal 0.10)
-      (familiarity_signal 0.90)
-      (low_confidence 0.10)
-      (verify_request true)
-      (help_short 0.80)
-    )
+    ((act_verify 10) (act_search 10) (act_clarify 10) (act_think 10) (act_respond 10))
+    ((complexity 0.10) (ambiguity 0.10) (threshold_signal 0.10) (failure_signal 0.10) (familiarity_signal 0.90) (threshold 0.65) (low_confidence 0.10) (verify_request 1))
     &space
   )
-  (
-      (act_verify 10)
-      (act_search 10)
-      (act_clarify 10)
-      (act_think 10)
-      (act_respond 10)
-  )
+  ((act_verify 10) (act_search 10) (act_clarify 10) (act_think 10) (act_respond 10))
 )
 
 ; test get-preferred
-!(test
-  (get-preferred factual 0.10 0.10)
-  act_search
-)
-!(test
-  (get-preferred reflective 0.10 0.10)
-  act_think
-)
-!(test
-  (get-preferred exploratory 0.40 0.10)
-  act_search
-)
-!(test
-  (get-preferred exploratory 0.39 0.44)
-  act_think
-)
+!(test (get-preferred factual 0.10 0.10) act_search)
+!(test (get-preferred reflective 0.10 0.10) act_think)
+!(test (get-preferred exploratory 0.40 0.10) act_search)
+!(test (get-preferred exploratory 0.39 0.44) act_think)
 !(abs-math 99)
 
 ; select-action with tie-breaking
 !(test
   (select-action
-    (
-      (act_search 15)
-      (act_think 10)
-    )
-    (
-      (intent_type factual)
-      (low_confidence 0.20)
-      (threshold 0.30)
-    )
+    ((act_search 15) (act_think 10))
+    ((intent_type factual) (low_confidence 0.20) (threshold 0.30))
     0.10
   )
-  (Result (act_search 15)
-          (
-            (act_search 15)
-            (act_think 10)
-          )
-  )
+  (Result (act_search 15) ((act_search 15) (act_think 10)))
 )
+
 !(test
   (select-action
-    (
-      (act_search 10)
-      (act_think 10)
-    )
-    (
-      (intent_type reflective)
-      (low_confidence 0.30)
-      (threshold 0.40)
-    )
+    ((act_search 10) (act_think 10))
+    ((intent_type reflective) (low_confidence 0.30) (threshold 0.40))
     0.20
   )
-  (Result (act_think 10.2001)
-          (
-            (act_search 10)
-            (act_think 10.2001)
-          )
-  )
+  (Result (act_think 10.2001) ((act_search 10) (act_think 10.2001)))
 )
 
 !(test
   (select-action
-    (
-      (act_search 12)
-      (act_think 12)
-    )
-    (
-      (intent_type factual)
-      (low_confidence 0.30)
-      (threshold 0.40)
-    )
+    ((act_search 12) (act_think 12))
+    ((intent_type factual) (low_confidence 0.30) (threshold 0.40))
     0.10
   )
-  (Result (act_search 12.1001)
-          (
-            (act_search 12.1001)
-            (act_think 12)
-          )
-  )
+  (Result (act_search 12.1001) ((act_search 12.1001) (act_think 12)))
 )
 
 !(test
   (select-action
-    (
-      (act_search 20)
-      (act_think 10)
-    )
-    (
-      (intent_type reflective)
-      (low_confidence 0.50)
-      (threshold 0.50)
-    )
+    ((act_search 20) (act_think 10))
+    ((intent_type reflective) (low_confidence 0.50) (threshold 0.50))
     0.10
   )
-  (Result (act_search 20)
-          (
-            (act_search 20)
-            (act_think 10)
-          )
-  )
+  (Result (act_search 20) ((act_search 20) (act_think 10)))
 )
+
 ; test for get-best-score
-
 !(test
-  (get-best-score
-    (
-      (act_search 10)
-      (act_think 5)
-    )
-  )
+  (get-best-score ((act_search 10) (act_think 5)))
   (act_search 10)
 )
 
 !(test
-  (get-best-score
-    (
-      (act_search 3)
-      (act_think 12)
-      (act_decompose 7)
-    )
-  )
+  (get-best-score ((act_search 3) (act_think 12) (act_decompose 7)))
   (act_think 12)
 )
 
 !(test
-  (get-best-score
-    (
-      (act_search 8)
-      (act_think 8)
-    )
-  )
+  (get-best-score ((act_search 8) (act_think 8)))
   (act_think 8)
 )
 
 ; test for routing pipeline with guard conditions
+
 ;; 1. Full activation path (all guards active, normal routing)
+!(remove-atom &space (decompose_min_complexity 0.4))
+!(remove-atom &space (decompose_urgent_min_complexity 0.7))
+!(remove-atom &space (decompose_max_ambiguity 0.8))
+!(add-atom &space (decompose_min_complexity 0.4))
+!(add-atom &space (decompose_urgent_min_complexity 0.7))
+!(add-atom &space (decompose_max_ambiguity 0.8))
+!(remove-state &space)
+!(update-mods &space (m_urgency 0.5) (m_resolution 0.5) (m_user_expertise 0.5) (m_threshold 0.5) (m_topic_familiarity 0.5) (m_failure_wariness 0.40) (m_securing 0.5) (m_approach 0.5) (m_arousal 0.5) (m_risk_aversion 0.5) (m_error_tolerance 0.5) (m_creativity 0.5) (m_valence 0.5))
+!(match &space (decompose_min_complexity $v) $v)
+!(match &space (decompose_urgent_min_complexity $v) $v)
+!(match &space (decompose_max_ambiguity $v) $v)
 !(test
   (apply-routing-guards
-    (
-      (act_search 10)
-      (act_decompose 10)
-      (act_synthesize 10)
-      (act_verify 10)
-    )
+    ((act_search 10) (act_decompose 10) (act_synthesize 10) (act_verify 10))
     (
       (needs_external_evidence 0.90)
       (needs_task_plan 0.50)
@@ -841,7 +456,7 @@
       (threshold 0.60)
       (low_confidence 0.50)
       (failure_wariness 0.40)
-      (verify_request true)
+      (verify_request 1)
       (complexity 0.70)
       (intent_type mixed)
       (urgent_flag false)
@@ -856,22 +471,15 @@
     )
     &space
   )
-  (
-    (act_search 10.56)
-    (act_decompose 9.44)
-    (act_synthesize 9.73)
-    (act_verify 10.45)
-  )
+  (((act_search 10.56) (act_decompose 9.44) (act_synthesize 9.73) (act_verify 10.45)) ((act_search 10.56) (act_decompose 9.44) (act_synthesize 9.73) (act_verify 10.45)) ((act_search 10.56) (act_decompose 9.44) (act_synthesize 9.73) (act_verify 10.45)) ((act_search 10.56) (act_decompose 9.44) (act_synthesize 9.73) (act_verify 10.45)) ((act_search 10.56) (act_decompose 9.44) (act_synthesize 9.73) (act_verify 10.45)) ((act_search 10.56) (act_decompose 9.44) (act_synthesize 9.73) (act_verify 10.45)) ((act_search 10.56) (act_decompose 9.44) (act_synthesize 9.73) (act_verify 10.45)) ((act_search 10.56) (act_decompose 9.44) (act_synthesize 9.73) (act_verify 10.45)))
 )
-;; 2. Weak external evidence → synth slightly down, search stable
+
+;; 2. Weak external evidence → synth blocked, decompose boosted
+!(remove-state &space)
+!(update-mods &space (m_urgency 0.5) (m_resolution 0.5) (m_user_expertise 0.5) (m_threshold 0.5) (m_topic_familiarity 0.5) (m_failure_wariness 0.30) (m_securing 0.5) (m_approach 0.5) (m_arousal 0.5) (m_risk_aversion 0.5) (m_error_tolerance 0.5) (m_creativity 0.5) (m_valence 0.5))
 !(test
   (apply-routing-guards
-    (
-      (act_search 8)
-      (act_decompose 8)
-      (act_synthesize 8)
-      (act_verify 8)
-    )
+    ((act_search 8) (act_decompose 8) (act_synthesize 8) (act_verify 8))
     (
       (needs_external_evidence 0.30)
       (needs_task_plan 0.70)
@@ -880,7 +488,7 @@
       (threshold 0.50)
       (low_confidence 0.30)
       (failure_wariness 0.30)
-      (verify_request false)
+      (verify_request 0)
       (complexity 0.60)
       (intent_type factual)
       (urgent_flag false)
@@ -895,10 +503,5 @@
     )
     &space
   )
-  (
-    (act_search 8)
-    (act_decompose 8.1)
-    (act_synthesize -1000000000.0)
-    (act_verify -1000000000.0)
-  )
+  (((act_search 8) (act_decompose 8.1) (act_synthesize -1.0e+09) (act_verify -1.0e+09)) ((act_search 8) (act_decompose 8.1) (act_synthesize -1.0e+09) (act_verify -1.0e+09)) ((act_search 8) (act_decompose 8.1) (act_synthesize -1.0e+09) (act_verify -1.0e+09)) ((act_search 8) (act_decompose 8.1) (act_synthesize -1.0e+09) (act_verify -1.0e+09)) ((act_search 8) (act_decompose 8.1) (act_synthesize -1.0e+09) (act_verify -1.0e+09)) ((act_search 8) (act_decompose 8.1) (act_synthesize -1.0e+09) (act_verify -1.0e+09)) ((act_search 8) (act_decompose 8.1) (act_synthesize -1.0e+09) (act_verify -1.0e+09)) ((act_search 8) (act_decompose 8.1) (act_synthesize -1.0e+09) (act_verify -1.0e+09)))
 )

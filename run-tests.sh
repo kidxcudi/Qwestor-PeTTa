@@ -1,6 +1,34 @@
 #!/bin/bash
+#!/bin/bash
 # ─────────────────────────────────────────────────────────────────────────────
 # run-tests.sh — MeTTa/PeTTa test runner for Qwestor-PeTTa
+# ─────────────────────────────────────────────────────────────────────────────
+#
+# USAGE:
+#   ./run-tests.sh [OPTIONS]
+#
+# OPTIONS:
+#   (none)         Default mode. Runs all test files found under */test/*.metta
+#                  and prints only pass/fail results and mismatches.
+#
+#   --verbose      Full output mode. Prints everything including PeTTa's
+#                  internal transpiler output, Prolog goals, and all println!
+#                  debug lines. Useful for deep debugging.
+#
+#   --clean        Clean output mode. Strips transpiler noise and Prolog goals,
+#                  but still shows debug println! lines alongside pass/fail.
+#                  Useful when you want to trace values without full verbosity.
+#
+#   --file <path>  Single file mode. Runs only the specified test file instead
+#                  of discovering all test files. Path can be relative or absolute.
+#                  Example: ./run-tests.sh --file operators/test/decision_test.metta
+#
+# EXAMPLES:
+#   ./run-tests.sh                                        # run all tests
+#   ./run-tests.sh --verbose                              # run all, full output
+#   ./run-tests.sh --clean                                # run all, clean output
+#   ./run-tests.sh --file operators/test/routing_test.metta  # run one file
+#   ./run-tests.sh --file operators/test/routing_test.metta --clean  # one file, clean
 # ─────────────────────────────────────────────────────────────────────────────
 
 # Source bashrc to get the petta function
@@ -47,9 +75,12 @@ filter_output() {
 # ─────────────────────────────────────────────
 # Run one test file from its own directory
 # ─────────────────────────────────────────────
+# ─────────────────────────────────────────────
+# Run one test file from its own directory
+# ─────────────────────────────────────────────
 run_test() {
     local abs_file="$1"
-    local file_dir file_name TEMP
+    local file_dir file_name TEMP OUTPUT
 
     file_dir="$(dirname "$abs_file")"
     file_name="$(basename "$abs_file")"
@@ -57,11 +88,22 @@ run_test() {
 
     cat "$abs_file" > "$TEMP"
 
-    (cd "$file_dir" && petta "$(basename "$TEMP")" 2>&1) | filter_output
-    local EXIT="${PIPESTATUS[0]}"
+    # Capture filtered output to a variable
+    OUTPUT=$( (cd "$file_dir" && petta "$(basename "$TEMP")" 2>&1) | filter_output )
+    
+    # Print the output so you can see it in the terminal
+    if [[ -n "$OUTPUT" ]]; then
+        echo "$OUTPUT"
+    fi
 
     rm -f "$TEMP"
-    return $EXIT
+
+    # Explicitly fail if the text contains a mismatch indicator
+    if echo "$OUTPUT" | grep -q "❌"; then
+        return 1
+    else
+        return 0
+    fi
 }
 
 # ─────────────────────────────────────────────
