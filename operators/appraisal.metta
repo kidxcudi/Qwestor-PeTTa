@@ -261,6 +261,7 @@
         ($_ (println! ("After cold weighting: urgency: " $u " resolution: " $res " user experience: " $ux " threshold: " $thr)))
 
         ($threshold (_effective $m_threshold $thr $coldWeight))
+        ($low_conf (- 1.0 $threshold))  ; ← ADDED: Calculate low_confidence
         ($urgent (getContext $space urgent))
         ($_ (println! ("urgent " $urgent)))
         ($intentType (getContext $space intent_type))
@@ -319,6 +320,7 @@
                         (resolution $res)
                         (user_expertise $ux)
                         (threshold $threshold)
+                        (low_confidence $low_conf)  ; ← ADDED: Include low_confidence in results
                         (securing $securing)
                         (approach $approach)
                         (arousal $arousal)

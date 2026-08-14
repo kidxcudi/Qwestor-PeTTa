@@ -3,10 +3,7 @@ import re
 def _clamp01(x: float) -> float:
     return max(0.0, min(1.0, float(x)))
 
-
-# ACTIONS table  ─ every entry is either a plain float or a
-# callable that takes cx and returns a float.
-
+# ACTIONS table
 ACTIONS: dict[str, dict] = {
     "act_respond":    {"efficiency": 0.85, "accuracy": 0.60,
                        "success_moderate": 0.70, "knowledge": 0.30,
@@ -31,9 +28,6 @@ ACTIONS: dict[str, dict] = {
                        "novelty": 0.55, "success_breakthrough": 0.60},
 }
 
-# penalty functions, corresponds to penalties.py
-
-
 def _hallucination_penalty(action: str, cx: float, ambiguity: float) -> float:
     base = {
         "act_respond":    0.90,
@@ -52,7 +46,6 @@ def _hallucination_penalty(action: str, cx: float, ambiguity: float) -> float:
         base += 0.10 * cx
     return _clamp01(base)
 
-
 def _redundancy_penalty(action: str, cx: float,
                          familiarity: float, urgency: float) -> float:
     if action == "act_respond":
@@ -68,7 +61,6 @@ def _redundancy_penalty(action: str, cx: float,
         "act_synthesize": 0.26,
     }.get(action, 0.35)
 
-
 def _premature_penalty(action: str, cx: float,
                         ambiguity: float, threshold: float) -> float:
     if action == "act_respond":
@@ -81,7 +73,6 @@ def _premature_penalty(action: str, cx: float,
         "act_think":      0.15,
         "act_synthesize": 0.06,
     }.get(action, 0.20)
-
 
 def _rabbit_hole_penalty(action: str, cx: float, ambiguity: float) -> float:
     if action == "act_think":
@@ -96,9 +87,6 @@ def _rabbit_hole_penalty(action: str, cx: float, ambiguity: float) -> float:
         "act_clarify":    0.14,
         "act_synthesize": 0.22,
     }.get(action, 0.20)
-
-
-# core scoring engine, corresponds to adjustments.py file 
 
 def _score_actions(
     *,
@@ -139,18 +127,17 @@ def _score_actions(
                 score += 0.18
 
         elif action == "act_respond":
-            score += 0.35 * u + 0.25 * (1.0 - ambiguity) + 0.15 * ux - 0.20 * cx
-            score += 0.20 * familiarity - 0.35 * threshold - 0.30 * failure_wariness
-            score -= 0.35 * securing + 0.20 * low_confidence
-            score += 0.10 * (1.0 - arousal)
+            # Boosted urgency and low-complexity bonuses so it wins on simple/urgent turns
+            score += 0.60 * u + 0.30 * (1.0 - ambiguity) + 0.20 * ux - 0.10 * cx
+            score += 0.25 * familiarity - 0.20 * threshold - 0.20 * failure_wariness
+            score -= 0.25 * securing + 0.10 * low_confidence
+            score += 0.15 * (1.0 - arousal)
             score += 0.12 * coherence + 0.10 * valence
             score += 0.14 * social - 0.06 * originality
-            score -= 0.18 * risk_aversion
-            score += 0.30 * help_short - 0.15 * help_long
+            score -= 0.15 * risk_aversion
+            score += 0.40 * help_short - 0.15 * help_long
             score += 0.45 * answerability
-            score += 0.22 * error_tolerance
-            score += 0.16 * help_short
-            score += 0.12 * anti_redundant
+            score += 0.30 * error_tolerance
             if cx >= 0.50:
                 score -= 0.08 * knowledge + 0.10 * success_breakthrough
 
@@ -173,14 +160,15 @@ def _score_actions(
             score -= reflective_search_penalty * reflective_intent
 
         elif action == "act_verify":
-            score += 0.65 * threshold + 0.75 * low_confidence + 0.35 * failure_wariness
-            score += 0.15 * cx - 0.20 * u - 0.10 * ambiguity
-            score += 0.30 * securing
+            # Toned down the low_confidence bonus so it doesn't beat act_respond on simple turns
+            score += 0.40 * threshold + 0.45 * low_confidence + 0.25 * failure_wariness
+            score += 0.10 * cx - 0.30 * u - 0.10 * ambiguity  # Penalized more by urgency
+            score += 0.25 * securing
             score += 0.14 * coherence - 0.14 * valence
             score += 0.10 * social - 0.08 * originality
-            score += 0.25 * risk_aversion
-            score -= 0.08 * arousal
-            score += 0.55 * (1.0 - error_tolerance)
+            score += 0.20 * risk_aversion
+            score -= 0.10 * arousal
+            score += 0.45 * (1.0 - error_tolerance)
             score += 0.08 * (1.0 - creativity)
             score += 0.08 * help_long - 0.10 * help_short
             score += 0.32 * (1.0 if verify_request else 0.0)
@@ -246,8 +234,7 @@ def _score_actions(
                 score -= 0.28
             if verify_request:
                 score -= 0.25
-        # this corresponds to penalities.py file 
-        # ── penalty deductions ──────────────────────────────────
+
         score -= anti_hall * _hallucination_penalty(action, cx=cx, ambiguity=ambiguity)
         score -= (anti_redundant
                   * _redundancy_penalty(action, cx=cx,
@@ -304,41 +291,80 @@ def _score_actions(
     return scores
 
 
-# metta list parsers  
- 
-
-def _parse_metta_pairlist(metta_str: str) -> dict:
+def _parse_metta_pairlist(data) -> dict:
     """
-    Parse a MeTTa flat-pair list such as
-      ((key1 val1) (key2 val2) ...)
-    into a Python dict.  Values that look like numbers become floats;
-    'true'/'false' become bools; everything else stays a string.
+    Robust parser for MeTTa pair lists.
+    Handles Python lists/tuples (e.g., [['key', val], ...]) and MeTTa strings (e.g., "(key val) ...")
     """
-    text = str(metta_str).strip()
-    pairs = re.findall(r'\((\S+)\s+([^()]+?)\)', text)
     result = {}
+    
+    def process_val(v):
+        if isinstance(v, bool):
+            return v
+        if isinstance(v, (int, float)):
+            return float(v)
+        v_str = str(v).strip()
+        if v_str.lower() == 'true':
+            return True
+        if v_str.lower() == 'false':
+            return False
+        try:
+            return float(v_str)
+        except ValueError:
+            return v_str
+
+    # 1. Handle Python list/tuple format
+    if isinstance(data, (list, tuple)):
+        for item in data:
+            if isinstance(item, (list, tuple)) and len(item) >= 2:
+                k = str(item[0])
+                result[k] = process_val(item[1])
+        return result
+
+    # 2. Handle string format
+    text = str(data).strip()
+    # Normalize Python list syntax to MeTTa syntax just in case it's stringified
+    text = text.replace("[", "(").replace("]", ")").replace(",", "")
+    
+    pairs = re.findall(r'\((\S+)\s+([^()]+?)\)', text)
     for k, v in pairs:
-        v = v.strip()
-        if v.lower() == 'true':
-            result[k] = True
-        elif v.lower() == 'false':
-            result[k] = False
-        else:
-            try:
-                result[k] = float(v)
-            except ValueError:
-                result[k] = v
+        result[k] = process_val(v)
+        
     return result
 
 
-def _parse_state_block(metta_str: str) -> dict:
+def _parse_state_block(data) -> dict:
     """
     Pull values out of the (state ...) atom that lives in the space list.
     Specifically extracts anti-goals and alpha constants.
+    Handles both lists and strings.
     """
-    text = str(metta_str)
     extra = {}
+    
+    def process_val(v):
+        if isinstance(v, bool):
+            return v
+        if isinstance(v, (int, float)):
+            return float(v)
+        try:
+            return float(str(v).strip())
+        except ValueError:
+            return 0.0
 
+    # 1. Handle Python list/tuple format
+    if isinstance(data, (list, tuple)):
+        for item in data:
+            if isinstance(item, (list, tuple)) and len(item) >= 2:
+                k = str(item[0]).replace("(", "").replace(")", "").strip()
+                if k in ("hallucinate", "redundant", "rabbit_hole", "premature", 
+                         "reflective_think_bonus", "reflective_search_penalty", 
+                         "topic_familiarity", "failure_wariness", "m_failure_wariness"):
+                    extra[k] = process_val(item[1])
+
+    # 2. Handle string format via regex
+    text = str(data)
+    text = text.replace("[", "(").replace("]", ")").replace(",", "")
+    
     for name in ("hallucinate", "redundant", "rabbit_hole", "premature"):
         m = re.search(rf'\({name}\s+([0-9.]+)\)', text)
         if m:
@@ -358,17 +384,15 @@ def _parse_state_block(metta_str: str) -> dict:
 
 
 def compute_scores(appraisal_metta, weights_metta, space_metta) -> str:
+    # Parse dynamically using the robust parsers
+    ap = _parse_metta_pairlist(appraisal_metta)
+    wt = _parse_metta_pairlist(weights_metta)
+    sp = _parse_state_block(space_metta)
 
-    ap   = _parse_metta_pairlist(str(appraisal_metta))
-    wt   = _parse_metta_pairlist(str(weights_metta))
-    sp   = _parse_state_block(str(space_metta))
-
- 
     anti_hall        = float(sp.get("hallucinate",  ap.get("hallucinate",  0.35)))
     anti_redundant   = float(sp.get("redundant",    ap.get("redundant",    0.30)))
     anti_rabbit_hole = float(sp.get("rabbit_hole",  ap.get("rabbit_hole",  0.28)))
     anti_premature   = float(sp.get("premature",    ap.get("premature",    0.30)))
-
    
     threshold      = float(ap.get("threshold", 0.30))
     low_confidence = _clamp01(1.0 - threshold) 
@@ -452,7 +476,6 @@ def compute_scores(appraisal_metta, weights_metta, space_metta) -> str:
         weights                   = weights_clean,
     )
 
-     
     order = ["act_respond", "act_search", "act_verify",
              "act_clarify", "act_decompose", "act_think", "act_synthesize"]
 
@@ -462,5 +485,3 @@ def compute_scores(appraisal_metta, weights_metta, space_metta) -> str:
         parts.append(f"({act} {round(val, 6)})")
 
     return "(" + " ".join(parts) + ")"
-
-

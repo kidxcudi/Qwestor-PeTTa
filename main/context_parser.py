@@ -308,7 +308,7 @@ def wrap_parser(query):
     from dotenv import load_dotenv
 
     print("Rate limit cooldown: sleeping for 3 seconds...")
-    time.sleep(5)
+    time.sleep(3)
 
     # Look for .env in the same directory as this script, or one level up (project root)
     script_dir = Path(__file__).resolve().parent

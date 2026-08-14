@@ -1,9 +1,6 @@
 ; ─────────────────────────────────────────────
 ; main/engine-step.metta
 ; Shared single-turn engine step, extracted out of main-loop.metta
-; so it can be imported by both the interactive main loop and the
-; session test/eval harness without re-running the module-level
-; session sweep that lives at the bottom of main-loop.metta.
 ; ─────────────────────────────────────────────
 
 !(import! &self "context_parser.py")
@@ -18,10 +15,42 @@
 !(import! &self score-actions)
 !(import! &self ../operators/routing)
 
+; --- Context Clearing Fix ---
+; collapse catches the failure if the atom doesn't exist, returning an empty list ().
+; case then ensures we return exactly one result (True) if empty, preventing branching!
+(= (remove-if-exists $space $pattern)
+   (let $results (collapse (match $space $pattern $pattern))
+        (if (== $results ())
+            True
+            (let $atom (car-atom $results)
+                 (remove-atom $space $atom)))))
+
+(= (clear-context $space)
+   (let* (
+     ($_ (remove-if-exists $space (complexity $v)))
+     ($_ (remove-if-exists $space (threshold $v)))
+     ($_ (remove-if-exists $space (ambiguity $v)))
+     ($_ (remove-if-exists $space (urgent $v)))
+     ($_ (remove-if-exists $space (intent_type $v)))
+     ($_ (remove-if-exists $space (expertise $v)))
+     ($_ (remove-if-exists $space (topic_familiarity $v)))
+     ($_ (remove-if-exists $space (failure_signal $v)))
+     ($_ (remove-if-exists $space (verify_request $v)))
+     ($_ (remove-if-exists $space (reflective_intent $v)))
+     ($_ (remove-if-exists $space (needs_external_evidence $v)))
+     ($_ (remove-if-exists $space (needs_task_plan $v)))
+     ($_ (remove-if-exists $space (needs_multi_source_integration $v)))
+     ($_ (remove-if-exists $space (valence $v)))
+   )
+   cleared))
+
 (= (addContexts $space $context)
+   (let* (
+     ($_ (clear-context $space))
+   )
    (if (== $context ())
         (add-context $space (context))
-        (add-context $space $context)))
+        (add-context $space $context))))
 
 
 ; --- Helpers to force transpiler to evaluate selectAction ---

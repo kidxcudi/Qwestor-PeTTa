@@ -2,6 +2,18 @@
 ; main/test/sessions_test.metta
 ; ─────────────────────────────────────────────
 
+; --- FORCE IMPORTS IN ORDER SO TRANSPILER RECOGNIZES FUNCTIONS ---
+!(import! &self ../../utils/general-helper)
+!(import! &self ../../utils/utils)
+!(import! &self ../../utils/constants)
+!(import! &self state)
+!(import! &self ../../operators/homeostasis)
+!(import! &self ../../operators/decision)
+!(import! &self ../../operators/appraisal)
+!(import! &self "../score_action.py")
+!(import! &self ../score-actions)
+!(import! &self ../../operators/routing)
+!(import! &self ../context_parser.py)
 !(import! &self ../engine-step)
 !(import! &self ../session-eval)
 !(import! &self "../run_sessions.py")
@@ -26,6 +38,7 @@
     
     ($_ (println! ("Logs written under run id:" $run-id)))
     ($_ (println! ("Strict correct:" $strict-count "/" $turn-count)))
+    ($_ (test $strict-count $turn-count))
   )
   $strict-count
 )
