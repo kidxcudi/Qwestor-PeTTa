@@ -94,7 +94,7 @@ def _calibrate_action_signals(
 def parse_with_gemini(
     query: str,
     api_key: str,
-    model: str = "gemini-2.5-flash",
+    model: str = "gemini-3.1-flash-lite",
 ) -> dict[str, Any] | None:
 
     try:
@@ -158,6 +158,10 @@ def parse_with_gemini(
 
         print(f"Response status: {response.status_code}")
 
+        if response.status_code == 429:
+            print("Rate limit hit! Aborting to prevent hanging.")
+            return None
+        
         if response.status_code != 200:
             print(response.text)
             response.raise_for_status()
@@ -299,11 +303,23 @@ def parse_with_gemini(
 
 
 def wrap_parser(query):
+    import os
+    from pathlib import Path
+    from dotenv import load_dotenv
 
-    load_dotenv()
+    print("Rate limit cooldown: sleeping for 3 seconds...")
+    time.sleep(5)
+
+    # Look for .env in the same directory as this script, or one level up (project root)
+    script_dir = Path(__file__).resolve().parent
+    env_path = script_dir / ".env"
+    if not env_path.exists():
+        env_path = script_dir.parent / ".env"
+        
+    load_dotenv(dotenv_path=env_path)
 
     api_key = os.getenv("GEMINI_API_KEY")
-    model_name = "gemini-2.5-flash"
+    model_name = "gemini-3.1-flash-lite"
 
     max_attempts = 3
     for attempt in range(1, max_attempts + 1):

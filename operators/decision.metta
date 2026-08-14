@@ -62,7 +62,7 @@
 
          ($_ (add-atom $space $updated))   
          )
-         (println! (goals update success 🎉))
+         (println! "goals update success")
    )
 )
 ; ─────────────────────────────────────────────
@@ -248,9 +248,7 @@
             ($reflective_int  (getContext $space reflective_intent))
             ($_ (println! ("ref: "$reflective_int)))
 
-
             ($_ (println! ("action: "$decision)))
-
 
             ; ── base targets ────────────────────────────────
             ($base_efficiency (+ 0.45
@@ -273,12 +271,12 @@
                                (if (== $urgent_bool True) -0.08 0.0)))))))
             ($_ (println! ("base_success: "$base_success_moderate)))
 
-
             ($base_knowledge (+ 0.35
                                 (+ (* 0.50 $cx)
                                    (+ (* 0.20 $ambiguity)
                                       (* 0.10 $expertise)))))
             ($_ (println! ("base_knowledge: "$base_knowledge)))
+            
             ($base_novelty (+ 0.30
                               (+ (* 0.35 $cx)
                                  (+ (* 0.25 (- 1.0 $topic_fam))
@@ -286,6 +284,7 @@
                                        (+ (* 0.10 $ambiguity)
                                           (if (== $urgent_bool True) -0.05 0.0)))))))
             ($_ (println! ("base_novelty: "$base_novelty)))
+            
             ($base_success_breakthrough
                 (+ 0.30
                    (+ (* 0.45 $cx)
@@ -293,6 +292,7 @@
                          (+ (* 0.20 $reflective_int)
                             (if (== $urgent_bool True) -0.08 0.0))))))
             ($_ (println! ("base_break: "$base_success_breakthrough)))
+            
             ($base_coherence
                 (+ 0.45
                    (+ (* 0.25 (- 1.0 $ambiguity))
@@ -300,6 +300,7 @@
                          (+ (* 0.20 $threshold)
                             (if (== $urgent_bool True) 0.0 0.10))))))
             ($_ (println! ("base_coherence: "$base_coherence)))
+            
             ($base_originality
                 (+ 0.30
                    (+ (* 0.40 $cx)
@@ -308,6 +309,7 @@
                             (+ (* 0.10 $ambiguity)
                                (if (== $urgent_bool True) -0.08 0.0)))))))
             ($_ (println! ("base_orig: "$base_originality)))
+            
             ($base_social
                 (+ 0.35
                    (+ (* 0.30 $ambiguity)
@@ -315,6 +317,7 @@
                          (+ (* 0.20 (- 1.0 $expertise))
                             (if (== $urgent_bool True) 0.10 0.0))))))
             ($_ (println! ("base_social: "$base_social)))
+            
             ($base_help_short
                 (+ 0.35
                    (+ (* 0.35 (- 1.0 $cx))
@@ -332,16 +335,18 @@
                    (+ (* 0.35 $threshold)
                       (* 0.20 $failure_signal))))
             ($_ (println! ("base_beneficial: "$base_over_beneficial)))
+            
             ($base_over_safety (+ 0.45
                                   (* 0.40 $threshold)))
             ($_ (println! ("base_safety: "$base_over_safety)))
+            
             ($base_over_honesty
                 (+ 0.45
                    (+ (* 0.35 $ambiguity)
                       (* 0.20 $failure_signal))))
             ($_ (println! ("base_honesty: "$base_over_honesty)))
-            ; ── action-adjusted targets (case style) ────────
             
+            ; ── action-adjusted targets (case style) ────────
             ($targets
               (case $decision (
                 (act_search
@@ -489,45 +494,41 @@
                   ))
               ))
             )
+
+            ; ── extract computed targets and clamp to [0, 1] ─────────
+            ($t_eff     (car-atom (goalTarget-get $targets efficiency)))
+            ($t_acc     (car-atom (goalTarget-get $targets accuracy)))
+            ($t_smod    (car-atom (goalTarget-get $targets success_moderate)))
+            ($t_kn      (car-atom (goalTarget-get $targets knowledge)))
+            ($t_nov     (car-atom (goalTarget-get $targets novelty)))
+            ($t_sbr     (car-atom (goalTarget-get $targets success_breakthrough)))
+            ($t_coh     (car-atom (goalTarget-get $targets coherence)))
+            ($t_ori     (car-atom (goalTarget-get $targets originality)))
+            ($t_soc     (car-atom (goalTarget-get $targets social)))
+            ($t_hs      (car-atom (goalTarget-get $targets help_short)))
+            ($t_hl      (car-atom (goalTarget-get $targets help_long)))
+            ($t_ben     (car-atom (goalTarget-get $targets over_beneficial)))
+            ($t_safe    (car-atom (goalTarget-get $targets over_safety)))
+            ($t_hon     (car-atom (goalTarget-get $targets over_honesty)))
         )
-        (let 
-          (goal-vector
-            (efficiency           $t_eff)
-            (accuracy             $t_acc)
-            (success_moderate     $t_smod)
-            (knowledge            $t_kn)
-            (novelty              $t_nov)
-            (success_breakthrough $t_sbr)
-            (coherence            $t_coh)
-            (originality          $t_ori)
-            (social               $t_soc)
-            (help_short           $t_hs)
-            (help_long            $t_hl)
-            (over_beneficial      $t_ben)
-            (over_safety          $t_safe)
-            (over_honesty         $t_hon)
-          )
-          $targets
-          (goal-vector
-            (efficiency           (_clamp01 $t_eff))
-            (accuracy             (_clamp01 $t_acc))
-            (success_moderate     (_clamp01 $t_smod))
-            (knowledge            (_clamp01 $t_kn))
-            (novelty              (_clamp01 $t_nov))
-            (success_breakthrough (_clamp01 $t_sbr))
-            (coherence            (_clamp01 $t_coh))
-            (originality          (_clamp01 $t_ori))
-            (social               (_clamp01 $t_soc))
-            (help_short           (_clamp01 $t_hs))
-            (help_long            (_clamp01 $t_hl))
-            (over_beneficial      (_clamp01 $t_ben))
-            (over_safety          (_clamp01 $t_safe))
-            (over_honesty         (_clamp01 $t_hon))
-          )
+        (goal-vector
+          (efficiency           (_clamp01 $t_eff))
+          (accuracy             (_clamp01 $t_acc))
+          (success_moderate     (_clamp01 $t_smod))
+          (knowledge            (_clamp01 $t_kn))
+          (novelty              (_clamp01 $t_nov))
+          (success_breakthrough (_clamp01 $t_sbr))
+          (coherence            (_clamp01 $t_coh))
+          (originality          (_clamp01 $t_ori))
+          (social               (_clamp01 $t_soc))
+          (help_short           (_clamp01 $t_hs))
+          (help_long            (_clamp01 $t_hl))
+          (over_beneficial      (_clamp01 $t_ben))
+          (over_safety          (_clamp01 $t_safe))
+          (over_honesty         (_clamp01 $t_hon))
         )
     )
 )
-
 ; tested- works 
 ; ─────────────────────────────────────────────
 ; antiGoalTargets – port of Python logic
@@ -878,16 +879,19 @@
  
                  )
 
-                (   
-                    (best_action $updated_scores)
-                    (sort_scores $updated_scores)
- 
+                (let* (
+                    ($b (best_action $updated_scores))
+                    ($s (sort_scores $updated_scores))
+                  )
+                  ($b $s)
                 )
             )
 
-            (
-               (best_action $scores)
-               (sort_scores $scores)      
+            (let* (
+               ($b (best_action $scores))
+               ($s (sort_scores $scores))
+             )
+             ($b $s)
             )
         )
     )
@@ -913,7 +917,7 @@
       
       ($_ (add-atom $space (state (turn $t) $g $m $new-anti $alpha)))
      )
-     (println! (anti-goals updated 🎉))
+     (println! "anti-goals updated")
    )
 )
 

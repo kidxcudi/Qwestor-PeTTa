@@ -258,7 +258,7 @@
         ($u (_effective $m_urgency $target_u $coldWeight))
         ($res (_effective $m_resolution $cx $coldWeight))
         ($ux (_effective $m_user_expertise $exp $coldWeight))
-        ($_ (println! ("After cold weighting: urgency: " $u " resolution: " $res " user experience: " $ux " threshold: " $thre)))
+        ($_ (println! ("After cold weighting: urgency: " $u " resolution: " $res " user experience: " $ux " threshold: " $thr)))
 
         ($threshold (_effective $m_threshold $thr $coldWeight))
         ($urgent (getContext $space urgent))

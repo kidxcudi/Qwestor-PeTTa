@@ -1,0 +1,33 @@
+; ─────────────────────────────────────────────
+; main/test/sessions_test.metta
+; ─────────────────────────────────────────────
+
+!(import! &self ../engine-step)
+!(import! &self ../session-eval)
+!(import! &self "../run_sessions.py")
+!(import! &self "../session_logger.py")
+
+!(bind! &space (new-space))
+!(addAlpha &space (alpha))
+!(addState &space (state (turn 0) (default-goals) (default-mods) (default-anti-goals) (alpha)))
+
+!(println! "=== SESSIONS TEST: running full session set through full-step ===")
+
+!(let*
+  (
+    ($raw (py-call (run_sessions.load_sessions_full)))
+    ($parsed (parse $raw))
+    ($all-records (run-all-sessions-graded &space $parsed))
+    ($run-result (py-call (session_logger.write_logs $all-records ".")))
+    
+    ($run-id (index-atom $run-result 0))
+    ($strict-count (index-atom $run-result 1))
+    ($turn-count (index-atom $run-result 2))
+    
+    ($_ (println! ("Logs written under run id:" $run-id)))
+    ($_ (println! ("Strict correct:" $strict-count "/" $turn-count)))
+  )
+  $strict-count
+)
+
+!(println! "=== SESSIONS TEST complete ===")
