@@ -252,14 +252,14 @@
 
             ; ── base targets ────────────────────────────────
             ($base_efficiency (+ 0.45
-                                 (+ (if (== $urgent_bool True) 0.35 0.0)
+                                 (+ (if (>= $urgent_bool 0.5) 0.35 0.0)
                                     (* 0.20 (- 1.0 $cx)))))
             ($_ (println! ("base_Eff: "$base_efficiency)))
 
             ($base_accuracy   (+ 0.45
                                  (+ (* 0.45 $cx)
                                     (+ (* 0.10 $ambiguity)
-                                       (if (== $urgent_bool True) 0.0 0.05)))))
+                                       (if (>= $urgent_bool 0.5) 0.0 0.05)))))
             ($_ (println! ("base_acc: "$base_accuracy)))
 
             ($base_success_moderate
@@ -268,7 +268,7 @@
                       (+ (* 0.25 $ambiguity)
                          (+ (* 0.25 $threshold)
                             (+ (* 0.20 $failure_signal)
-                               (if (== $urgent_bool True) -0.08 0.0)))))))
+                               (if (>= $urgent_bool 0.5) -0.08 0.0)))))))
             ($_ (println! ("base_success: "$base_success_moderate)))
 
             ($base_knowledge (+ 0.35
@@ -282,7 +282,7 @@
                                  (+ (* 0.25 (- 1.0 $topic_fam))
                                     (+ (* 0.20 $reflective_int)
                                        (+ (* 0.10 $ambiguity)
-                                          (if (== $urgent_bool True) -0.05 0.0)))))))
+                                          (if (>= $urgent_bool 0.5) -0.05 0.0)))))))
             ($_ (println! ("base_novelty: "$base_novelty)))
             
             ($base_success_breakthrough
@@ -290,7 +290,7 @@
                    (+ (* 0.45 $cx)
                       (+ (* 0.25 $ambiguity)
                          (+ (* 0.20 $reflective_int)
-                            (if (== $urgent_bool True) -0.08 0.0))))))
+                            (if (>= $urgent_bool 0.5) -0.08 0.0))))))
             ($_ (println! ("base_break: "$base_success_breakthrough)))
             
             ($base_coherence
@@ -298,7 +298,7 @@
                    (+ (* 0.25 (- 1.0 $ambiguity))
                       (+ (* 0.25 (- 1.0 $failure_signal))
                          (+ (* 0.20 $threshold)
-                            (if (== $urgent_bool True) 0.0 0.10))))))
+                            (if (>= $urgent_bool 0.5) 0.0 0.10))))))
             ($_ (println! ("base_coherence: "$base_coherence)))
             
             ($base_originality
@@ -307,7 +307,7 @@
                       (+ (* 0.25 $reflective_int)
                          (+ (* 0.20 (- 1.0 $topic_fam))
                             (+ (* 0.10 $ambiguity)
-                               (if (== $urgent_bool True) -0.08 0.0)))))))
+                               (if (>= $urgent_bool 0.5) -0.08 0.0)))))))
             ($_ (println! ("base_orig: "$base_originality)))
             
             ($base_social
@@ -315,14 +315,14 @@
                    (+ (* 0.30 $ambiguity)
                       (+ (* 0.20 $failure_signal)
                          (+ (* 0.20 (- 1.0 $expertise))
-                            (if (== $urgent_bool True) 0.10 0.0))))))
+                            (if (>= $urgent_bool 0.5) 0.10 0.0))))))
             ($_ (println! ("base_social: "$base_social)))
             
             ($base_help_short
                 (+ 0.35
                    (+ (* 0.35 (- 1.0 $cx))
                       (+ (* 0.20 (- 1.0 $ambiguity))
-                         (if (== $urgent_bool True) 0.10 0.0)))))
+                         (if (>= $urgent_bool 0.5) 0.10 0.0)))))
             ($_ (println! ("base_help_short: "$base_help_short)))
 
             ($base_help_long (+ 0.30
@@ -545,7 +545,7 @@
             ($_ (println! ("failure_signal: " $failure_signal)))
             ($urgent_bool    (getContext $space urgent))
             ($_ (println! ("urgent_bool: " $urgent_bool)))
-            ($urgency        (if (== $urgent_bool True) 1.0 0.0))
+            ($urgency        (if (>= $urgent_bool 0.5) 1.0 0.0))
             ($_ (println! ("urgency: " $urgency)))
             ($complexity     (getContext $space complexity))
             ($_ (println! ("complexity: " $complexity)))

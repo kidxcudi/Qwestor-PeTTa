@@ -307,6 +307,25 @@ def wrap_parser(query):
     from pathlib import Path
     from dotenv import load_dotenv
 
+    # Query-keyed cache, module-level so it survives across repeated
+    # py-call invocations within the same petta process (Janus embeds
+    # Python in-process; module state persists). Added because petta's
+    # Prolog backtracking has been observed to re-invoke this py-call for
+    # the same query multiple times in a single run (real Gemini calls
+    # each time) -- this doesn't fix that underlying backtracking, but it
+    # means a repeat call for a query already seen this process returns
+    # instantly instead of re-hitting the API. Root cause is still open;
+    # see the (case True (...)) wrap suggested for sessions_test_smoke.metta.
+    global _WRAP_PARSER_CACHE
+    try:
+        _WRAP_PARSER_CACHE
+    except NameError:
+        _WRAP_PARSER_CACHE = {}
+
+    if query in _WRAP_PARSER_CACHE:
+        print(f"wrap_parser cache hit, skipping Gemini call for: {query!r}")
+        return _WRAP_PARSER_CACHE[query]
+
     print("Rate limit cooldown: sleeping for 3 seconds...")
     time.sleep(3)
 
@@ -335,10 +354,33 @@ def wrap_parser(query):
             time.sleep(wait)
 
     if result_dict is None:
-        print("⚠️ Using fallback context")
-        raise RuntimeError(
-            "LLM parsing failed - no context generated after 3 attempts"
+        # Was: raise RuntimeError(...) here, which contradicted the log
+        # line above it (claimed a fallback, actually crashed the run).
+        # This fallback dict mirrors operators/appraisal.metta:399-417's
+        # (context) default atom exactly, so a degraded run still produces
+        # a context shape the rest of the pipeline (and session_logger's
+        # CONTEXT_KEYS) already expects -- single source of truth for the
+        # actual values stays the .metta file; this just has to match it.
+        print(
+            f"⚠️ Gemini parsing failed after {max_attempts} attempts — "
+            "using fallback context instead of crashing the run."
         )
+        result_dict = {
+            "urgent": 0.00,
+            "complexity": 0.30,
+            "ambiguity": 0.00,
+            "expertise": 0.50,
+            "threshold": 0.30,
+            "topic_familiarity": 0.50,
+            "failure_signal": 0.30,
+            "intent_type": "mixed",
+            "reflective_intent": 0.50,
+            "verify_request": False,
+            "needs_external_evidence": 0.30,
+            "needs_task_plan": 0.20,
+            "needs_multi_source_integration": 0.30,
+            "valence": 0.00,
+        }
 
     ordered_keys = [
         "urgent",
@@ -374,6 +416,7 @@ def wrap_parser(query):
 
         result_list.append([key, value])
 
+    _WRAP_PARSER_CACHE[query] = result_list
     return result_list
 
 

@@ -9,17 +9,28 @@ Ported fields (verified against a real MetaMo run_20260812_132800):
     logs/{run_id}/eval/strict_per_turn.json
     logs/{run_id}/eval/strict_per_session.json
     logs/{run_id}/eval/strict_overall.json
+    logs/{run_id}/eval/evaluation_results.json
 
 Fields with no MeTTa-side source yet (operators/homeostasis.metta has no
 trigger_count/trigger_keys/mode logic, and full-step does not generate a
 free-text answer) are emitted as null/empty placeholders to keep the JSON
 shape identical to MetaMo's output, per explicit instruction.
+
+evaluation_results.json's schema (turn_count/strict_accuracy/soft_accuracy/
+top3_hit_rate/average_decision_margin/predicted_action_counts/
+expected_action_counts/confusion_matrix/sessions/turns) is ported directly
+from usecase/metrics/qwestor_eval.py's _metrics_for/_build_evaluation.
+write_logs calls plot_evaluation_results.save_figures() directly on that
+same dict at the end of every run (best-effort, never fails the run itself),
+so logs/{run_id}/eval/plots/*.png are produced automatically -- no separate
+manual `python plot_evaluation_results.py` step needed.
 """
 
 from __future__ import annotations
 
 import csv
 import json
+from collections import Counter, defaultdict
 from datetime import datetime
 from pathlib import Path
 from typing import Any
@@ -84,6 +95,30 @@ def _flatten_metta_list(data: Any) -> list:
                     out.extend(_flatten_metta_list(item))
     return out
 
+def _flatten_scalar_list(data: Any) -> list:
+    """Flattens a MeTTa (Cons head tail) list of scalar strings into a flat
+    Python list. Mirrors _flatten_metta_list's Cons-walking logic but for
+    leaf scalars (e.g. acceptable_actions) instead of 15-element records."""
+    if data is None:
+        return []
+    if isinstance(data, str):
+        return [] if data == "Cons" else [data]
+    if not isinstance(data, (list, tuple)):
+        return []
+    if len(data) == 3 and data[0] == "Cons":
+        out = []
+        head, tail = data[1], data[2]
+        out.extend(_flatten_scalar_list(head))
+        out.extend(_flatten_scalar_list(tail))
+        return out
+    out = []
+    for item in data:
+        if item == "Cons" or item == [] or item == ():
+            continue
+        out.extend(_flatten_scalar_list(item))
+    return out
+
+
 def _safe_float(val):
     """Safely converts a value to float, returning 0.0 if it's an unevaluated list/expression."""
     try:
@@ -126,16 +161,39 @@ def _floatify(d: dict, keys: list[str]) -> dict:
 
 
 def _score_top3_from_sorted(sorted_scores: Any) -> list[list]:
-    top3 = []
+    """Normalizes and re-sorts entries into the top 3 [action_name, score]
+    pairs, highest score first.
+
+    operators/decision.metta's sort_scores (line 758) builds
+    ($score act_name) pairs -- score first, name second -- the reverse of
+    the (name, score) convention this function originally assumed. That
+    mismatch meant float(score) always raised trying to convert the action
+    name string, got swallowed by the except below, and every entry was
+    silently dropped: score_top3 (and downstream decision_margin /
+    top3_hit_rate) have been empty in every run so far, going back to at
+    least run_20260820_014750. Detecting orientation per-entry fixes the
+    immediate bug; explicitly re-sorting here (rather than trusting
+    incoming order) also sidesteps needing to confirm which direction
+    MeTTa's `sort` builtin orders ascending vs descending.
+    """
+    parsed: list[tuple[str, float]] = []
     if not sorted_scores:
-        return top3
-    for entry in list(sorted_scores)[:3]:
+        return []
+    for entry in sorted_scores:
         try:
-            name, score = entry[0], entry[1]
-            top3.append([str(name), float(score)])
-        except (TypeError, IndexError, ValueError):
+            a, b = entry[0], entry[1]
+        except (TypeError, IndexError):
             continue
-    return top3
+        try:
+            score, name = float(a), b
+        except (TypeError, ValueError):
+            try:
+                score, name = float(b), a
+            except (TypeError, ValueError):
+                continue
+        parsed.append((str(name), score))
+    parsed.sort(key=lambda item: item[1], reverse=True)
+    return [[name, score] for name, score in parsed[:3]]
 
 
 def _format_score_top3_text(score_top3: list[list]) -> str:
@@ -146,6 +204,64 @@ def _format_score_top3_text(score_top3: list[list]) -> str:
         except (TypeError, ValueError):
             continue
     return " | ".join(parts)
+
+
+def _decision_margin(score_top3: list[list]) -> float | None:
+    """Top-1 minus top-2 score, the same quantity manually eyeballed in
+    debug notes ('search 2.97 vs think 2.81'). None when fewer than two
+    candidates were scored."""
+    if len(score_top3) < 2:
+        return None
+    try:
+        return round(float(score_top3[0][1]) - float(score_top3[1][1]), 6)
+    except (TypeError, ValueError, IndexError):
+        return None
+
+
+def _metrics_for(turns: list[dict]) -> dict[str, Any]:
+    """Aggregate metrics for a list of enriched turn records. Ported from
+    usecase/metrics/qwestor_eval.py's _metrics_for so the output here is
+    schema-compatible with usecase/plot_evaluation_results.py."""
+    labeled = [t for t in turns if t.get("expected_action")]
+    strict_total = sum(int(t.get("strict_correct") or 0) for t in labeled)
+    soft_total = sum(float(t.get("soft_score") or 0.0) for t in labeled)
+    margins = [
+        float(t["decision_margin"]) for t in labeled
+        if t.get("decision_margin") is not None
+    ]
+    turn_count = len(labeled)
+
+    predicted_counts = Counter(
+        str(t.get("predicted_action", "")) for t in labeled if t.get("predicted_action")
+    )
+    expected_counts = Counter(
+        str(t.get("expected_action", "")) for t in labeled if t.get("expected_action")
+    )
+    top3_hits = sum(1 for t in labeled if t.get("top3_hit"))
+
+    confusion: dict[str, Counter] = defaultdict(Counter)
+    for t in labeled:
+        expected = str(t.get("expected_action", ""))
+        predicted = str(t.get("predicted_action", ""))
+        if expected and predicted:
+            confusion[expected][predicted] += 1
+
+    return {
+        "turn_count": turn_count,
+        "strict_correct": strict_total,
+        "strict_accuracy": round(strict_total / turn_count, 6) if turn_count else None,
+        "soft_accuracy": round(soft_total / turn_count, 6) if turn_count else None,
+        "top3_hit_rate": round(top3_hits / turn_count, 6) if turn_count else None,
+        "average_decision_margin": (
+            round(sum(margins) / len(margins), 6) if margins else None
+        ),
+        "predicted_action_counts": dict(sorted(predicted_counts.items())),
+        "expected_action_counts": dict(sorted(expected_counts.items())),
+        "confusion_matrix": {
+            expected: dict(sorted(predicted.items()))
+            for expected, predicted in sorted(confusion.items())
+        },
+    }
 
 
 def write_logs(run_records: Any, base_dir_str: str) -> list:
@@ -196,7 +312,7 @@ def write_logs(run_records: Any, base_dir_str: str) -> list:
             query = str(query)
             expected_action = str(expected_action)
             predicted_action = str(predicted_action)
-            acceptable_list = [str(a) for a in (acceptable_actions or [])]
+            acceptable_list = [str(a) for a in _flatten_scalar_list(acceptable_actions)]
             style_modifier = (
                 "" if style_modifier in (None, "no-style") else str(style_modifier)
             )
@@ -222,6 +338,8 @@ def write_logs(run_records: Any, base_dir_str: str) -> list:
             }
 
             score_top3 = _score_top3_from_sorted(sorted_scores_raw)
+            decision_margin = _decision_margin(score_top3)
+            top3_hit = expected_action in {name for name, _ in score_top3}
 
             strict_correct = int(predicted_action == expected_action)
             acceptable_hit = int(
@@ -283,6 +401,8 @@ def write_logs(run_records: Any, base_dir_str: str) -> list:
                 "strict_correct": strict_correct,
                 "acceptable_hit": acceptable_hit,
                 "soft_score": soft_score,
+                "decision_margin": decision_margin,
+                "top3_hit": top3_hit,
             })
 
             score_top3_text = _format_score_top3_text(score_top3)
@@ -367,8 +487,39 @@ def write_logs(run_records: Any, base_dir_str: str) -> list:
         "soft_accuracy": (
             float(soft_total_score) / float(total_turns) if total_turns else 0.0
         ),
-        "soft_credit_for_acceptable": SOFT_CREDIT,
+        "soft_credit_for_~": SOFT_CREDIT,
         "session_set": "short",
+    }
+
+    # decision_margin / confusion_matrix / top3_hit_rate, computed over the
+    # same strict_turn_records (now carrying decision_margin + top3_hit per
+    # turn) via the qwestor_eval.py-ported _metrics_for helper.
+    overall_metrics = _metrics_for(strict_turn_records)
+    sessions_metrics = {
+        name: _metrics_for([t for t in strict_turn_records if t["session"] == name])
+        for name in session_names_seen
+    }
+
+    strict_overall.update({
+        "top3_hit_rate": overall_metrics["top3_hit_rate"],
+        "average_decision_margin": overall_metrics["average_decision_margin"],
+        "predicted_action_counts": overall_metrics["predicted_action_counts"],
+        "expected_action_counts": overall_metrics["expected_action_counts"],
+        "confusion_matrix": overall_metrics["confusion_matrix"],
+    })
+    for rec in strict_session_records:
+        rec.update({
+            k: v for k, v in sessions_metrics[rec["session"]].items()
+            if k not in ("turn_count", "strict_correct", "strict_accuracy", "soft_accuracy")
+        })
+
+    evaluation_results = {
+        "generated_at": datetime.now().isoformat(timespec="seconds"),
+        "source_run_id": run_id,
+        **overall_metrics,
+        "unlabeled_turn_count": total_turns - overall_metrics["turn_count"],
+        "sessions": sessions_metrics,
+        "turns": strict_turn_records,
     }
 
     with (eval_dir / "strict_per_turn.json").open("w", encoding="utf-8") as f:
@@ -377,14 +528,40 @@ def write_logs(run_records: Any, base_dir_str: str) -> list:
         json.dump(strict_session_records, f, ensure_ascii=True, indent=2)
     with (eval_dir / "strict_overall.json").open("w", encoding="utf-8") as f:
         json.dump(strict_overall, f, ensure_ascii=True, indent=2)
+    with (eval_dir / "evaluation_results.json").open("w", encoding="utf-8") as f:
+        json.dump(evaluation_results, f, ensure_ascii=True, indent=2)
 
     print(f"Strict accuracy: {total_correct}/{total_turns} = {overall_accuracy:.3f}")
     print(
         f"Soft accuracy: {soft_total_score:.1f}/{total_turns} = "
         f"{strict_overall['soft_accuracy']:.3f}"
     )
+    print(
+        f"Top-3 hit rate: {overall_metrics['top3_hit_rate']}, "
+        f"avg decision margin: {overall_metrics['average_decision_margin']}"
+    )
     print(f"Saved eval files to {eval_dir}")
     print(f"Saved logs to {logs_dir}")
+
+    # Auto-plot: fires every time this function runs, regardless of whether
+    # it's invoked via run-tests.sh, a raw `petta` call, or anything else,
+    # since it's a direct in-process call rather than something that needs
+    # separate shell wiring. save_figures() takes the evaluation_results
+    # dict we already built above -- no need to re-read the JSON we just
+    # wrote. Wrapped defensively: a plotting failure (missing matplotlib,
+    # unexpected data shape, etc.) must never take down the actual eval run
+    # that produced the numbers in the first place.
+    try:
+        import sys as _sys
+        _main_dir = str(Path(__file__).resolve().parent)
+        if _main_dir not in _sys.path:
+            _sys.path.insert(0, _main_dir)
+        from plot_evaluation_results import save_figures
+        plot_dir = eval_dir / "plots"
+        session_png, overall_png = save_figures(evaluation_results, plot_dir, dpi=180)
+        print(f"Saved plots to {plot_dir}")
+    except Exception as exc:  # noqa: BLE001 - plotting is best-effort
+        print(f"(plot generation skipped: {exc})")
 
     # Returned as a plain list (not a dict) since py-call results cross
     # back into MeTTa most predictably as an ordered pair list here,

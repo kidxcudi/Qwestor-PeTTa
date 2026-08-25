@@ -55,7 +55,7 @@
         ($vr (getContext $space verify_request))
         ($urg (getContext $space urgent))
         ($val (getContext $space valence))
-        ($target_u (if (== $urg 1) 1.0 0.0))
+        ($target_u (if (>= $urg 0.5) 1.0 0.0))
 
 
         ($_ (println! ("complexity: " $cx " ambiguity: " $amb " expertise: " $exp " threshold: " $thr " failure_signal: " $fs " topic_familiarity: " $fam " reflective_intent: " $ri " verify_request: " $vr)))
@@ -179,7 +179,7 @@
             (* 0.40 $thr)
             (+ (* 0.30 $fs)
                (+ (* 0.20 $amb)
-                  (* 0.10 (if (== $urg 1) 1 0))))))))
+                  (* 0.10 (if (>= $urg 0.5) 1 0))))))))
         ($_ (println! ("risk_aversion_target: " $risk_aversion_target)))
 
         ($m_risk_aversion
@@ -197,7 +197,7 @@
                (+ (* 0.20 $fam)
                   (+ (* 0.15 (- 1.0 $fs))
                      (- (* -0.20 $amb)
-                        (* 0.10 (if (== $urg 1) 1 0))))))))))
+                        (* 0.10 (if (>= $urg 0.5) 1 0))))))))))
         ($_ (println! ("error_tolerance_target: " $error_tolerance_target)))
 
         ($m_error_tolerance

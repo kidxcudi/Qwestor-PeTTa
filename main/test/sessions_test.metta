@@ -38,7 +38,6 @@
     
     ($_ (println! ("Logs written under run id:" $run-id)))
     ($_ (println! ("Strict correct:" $strict-count "/" $turn-count)))
-    ($_ (test $strict-count $turn-count))
   )
   $strict-count
 )

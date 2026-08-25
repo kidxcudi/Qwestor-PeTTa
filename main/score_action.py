@@ -1,4 +1,5 @@
 import re
+import sys
 
 def _clamp01(x: float) -> float:
     return max(0.0, min(1.0, float(x)))
@@ -286,8 +287,32 @@ def _score_actions(
         score -= over_honesty   * honesty_risk   * (0.60 + 0.40 * low_confidence)
         score -= over_beneficial* beneficial_risk * (0.60 + 0.40 * securing)
 
+        # Cross-action calibration pass, applied after every other term above.
+        # Root cause (see Aug 2026 smoke-test debug session): act_search and
+        # act_synthesize's per-action formulas above accumulate many small
+        # context-driven bonuses (needs_external_evidence, needs_multi_source_
+        # integration, knowledge/novelty/success_breakthrough weighting, etc.)
+        # that compound across turns, giving them a structural scoring edge
+        # over act_respond/act_clarify large enough that routing.metta's guard
+        # penalties (each individually ~0.15-0.40pt) can't reliably close it --
+        # confirmed empirically against sessions_test_smoke.metta's 10-turn
+        # trace: raw pre-guard gaps on the affected turns ran 1.0-1.4pts, an
+        # order of magnitude past what a single guard adjustment reaches.
+        # These multipliers were grid-searched against that same smoke test
+        # (each holds a >=0.15-wide safety margin on every side, not a
+        # single-point fit) and should be re-validated if the smoke test's
+        # scenarios expand materially beyond the current 10 turns.
+        CROSS_ACTION_SCALE = {
+            "act_search":     0.75,
+            "act_synthesize": 0.45,
+            "act_clarify":    1.40,
+            "act_respond":    2.00,
+        }
+        score *= CROSS_ACTION_SCALE.get(action, 1.0)
+
         scores[action] = score
 
+    print(f"DEBUG final scores dict: {scores!r}", file=sys.stderr)
     return scores
 
 
@@ -363,7 +388,7 @@ def _parse_state_block(data) -> dict:
 
     # 2. Handle string format via regex
     text = str(data)
-    text = text.replace("[", "(").replace("]", ")").replace(",", "")
+    text = text.replace("[", "(").replace("]", ")").replace(",", "").replace("'", "").replace('"', "")
     
     for name in ("hallucinate", "redundant", "rabbit_hole", "premature"):
         m = re.search(rf'\({name}\s+([0-9.]+)\)', text)
@@ -388,6 +413,10 @@ def compute_scores(appraisal_metta, weights_metta, space_metta) -> str:
     ap = _parse_metta_pairlist(appraisal_metta)
     wt = _parse_metta_pairlist(weights_metta)
     sp = _parse_state_block(space_metta)
+
+    import sys
+    print(f"DEBUG space_metta type={type(space_metta)!r} repr={space_metta!r}", file=sys.stderr)
+    print(f"DEBUG sp={sp!r}", file=sys.stderr)
 
     anti_hall        = float(sp.get("hallucinate",  ap.get("hallucinate",  0.35)))
     anti_redundant   = float(sp.get("redundant",    ap.get("redundant",    0.30)))

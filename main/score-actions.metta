@@ -1,6 +1,6 @@
 (= (space-anti-goals $space)
    (let* (
-     ($anti (get-atoms $space))
+     ($anti (collapse (get-atoms $space)))
    )
    $anti
    )
@@ -8,10 +8,11 @@
 
 (= (score-all-actions $space $appraisal $weights)
    (let* (
+     ($space-atoms (collapse (get-atoms $space)))
      ($scores (py-call (score_action.compute_scores
                           $appraisal
                           $weights
-                          $space)))
+                          $space-atoms)))
      ($final_scores (parse $scores))
    )
    $final_scores

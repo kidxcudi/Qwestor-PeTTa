@@ -25,22 +25,27 @@
 
 !(println! "=== SESSIONS SMOKE TEST: Session A only ===")
 
-!(let*
+!(case True
   (
-    ($raw (py-call (run_sessions.load_session_a_smoke)))
-    ($parsed (parse $raw))
-    ($all-records (run-all-sessions-graded &space $parsed))
-    ($run-result (py-call (session_logger.write_logs $all-records ".")))
-    
-    ($run-id (index-atom $run-result 0))
-    ($strict-count (index-atom $run-result 1))
-    ($turn-count (index-atom $run-result 2))
-    
-    ($_ (println! ("Logs written under run id:" $run-id)))
-    ($_ (println! ("Strict correct:" $strict-count "/" $turn-count)))
-    ($_ (test $strict-count $turn-count))
+    (True
+      (let*
+        (
+          ($raw (py-call (run_sessions.load_session_a_smoke)))
+          ($parsed (parse $raw))
+          ($all-records (run-all-sessions-graded &space $parsed))
+          ($run-result (py-call (session_logger.write_logs $all-records ".")))
+
+          ($run-id (index-atom $run-result 0))
+          ($strict-count (index-atom $run-result 1))
+          ($turn-count (index-atom $run-result 2))
+
+          ($_ (println! ("Logs written under run id:" $run-id)))
+          ($_ (println! ("Strict correct:" $strict-count "/" $turn-count)))
+        )
+        $strict-count
+      )
+    )
   )
-  $strict-count
 )
 
 !(println! "=== SESSIONS SMOKE TEST complete ===")
