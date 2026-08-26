@@ -33,6 +33,7 @@ import json
 from collections import Counter, defaultdict
 from datetime import datetime
 from pathlib import Path
+import sys
 from typing import Any
 
 SOFT_CREDIT = 0.8
@@ -562,7 +563,7 @@ def write_logs(run_records: Any, base_dir_str: str) -> list:
         print(f"Saved plots to {plot_dir}")
     except Exception as exc:  # noqa: BLE001 - plotting is best-effort
         print(f"(plot generation skipped: {exc})")
-
+    sys._exit(0)
     # Returned as a plain list (not a dict) since py-call results cross
     # back into MeTTa most predictably as an ordered pair list here,
     # matching the [key, value] convention used elsewhere in this repo.
