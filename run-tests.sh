@@ -15,8 +15,17 @@
 #                  internal transpiler output, Prolog goals, and all println!
 #                  debug lines. Useful for deep debugging.
 #
-#   --clean        Clean output mode. Strips transpiler noise and Prolog goals,
-#                  but still shows debug println! lines alongside pass/fail.
+#   --full         Full output, transpiler stripped. Prints every println!/
+#                  DEBUG/result line (the actual execution trace) but removes
+#                  the PeTTa transpiler noise — the "--> metta runnable -->"
+#                  and "--> metta function -->" blocks along with their
+#                  "--> prolog goal -->" / "--> prolog clause -->" translations.
+#                  Use this when you want the full trace without wading through
+#                  the transpiled Prolog.
+#
+#   --clean        Clean output mode. Strips transpiler noise (same as --full)
+#                  and then narrows down further to only pass/fail lines,
+#                  assertion mismatches, errors, and quoted println! output.
 #                  Useful when you want to trace values without full verbosity.
 #
 #   --file <path>  Single file mode. Runs only the specified test file instead
@@ -26,6 +35,7 @@
 # EXAMPLES:
 #   ./run-tests.sh                                        # run all tests
 #   ./run-tests.sh --verbose                              # run all, full output
+#   ./run-tests.sh --full                                 # run all, full trace, no transpiler
 #   ./run-tests.sh --clean                                # run all, clean output
 #   ./run-tests.sh --file operators/test/routing_test.metta  # run one file
 #   ./run-tests.sh --file operators/test/routing_test.metta --clean  # one file, clean
@@ -47,24 +57,37 @@ echo "📁 Project root: $PROJECT_ROOT"
 # ─────────────────────────────────────────────
 VERBOSE=false
 CLEAN=false
+FULL=false
 SINGLE_FILE=""
 
 for arg in "$@"; do
     case "$arg" in
         --verbose) VERBOSE=true ;;
+        --full)    FULL=true ;;
         --clean)   CLEAN=true ;;
         --file)    shift; SINGLE_FILE="$1" ;;
     esac
 done
 
+# Strips ANSI color codes and deletes every PeTTa transpiler block:
+#   "--> metta runnable -->" ... up through the closing "^^^^^^^^^^" line
+#   "--> metta function -->" ... up through the closing "^^^^^^^^^^" line
+# (this covers the "--> prolog goal -->" / "--> prolog clause -->" sections
+# too, since those live inside those same blocks, right before the caret line)
+strip_transpiler() {
+    sed 's/\x1b\[[0-9;]*m//g' | \
+    sed '/^--> metta runnable/,/^\^\+$/d' | \
+    sed '/^--> metta function -->/,/^\^\+$/d' | \
+    sed '/^true$/d'
+}
+
 filter_output() {
     if $VERBOSE; then
         cat
+    elif $FULL; then
+        strip_transpiler
     elif $CLEAN; then
-        sed 's/\x1b\[[0-9;]*m//g' | \
-        sed '/^--> metta runnable/,/^\^\+$/d' | \
-        sed '/^--> metta function -->/,/^\^\+$/d' | \
-        sed '/^true$/d' | \
+        strip_transpiler | \
         grep -E '(✅ Passed:|❌ Failed:|is .*, should .*\.|^ERROR:|^".*")'
     else
         sed 's/\x1b\[[0-9;]*m//g' | \
@@ -72,9 +95,6 @@ filter_output() {
     fi
 }
 
-# ─────────────────────────────────────────────
-# Run one test file from its own directory
-# ─────────────────────────────────────────────
 # ─────────────────────────────────────────────
 # Run one test file from its own directory
 # ─────────────────────────────────────────────

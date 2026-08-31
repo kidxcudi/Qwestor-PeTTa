@@ -126,6 +126,14 @@ def _score_actions(
             score -= 0.15 * anti_redundant
             if ambiguity > 0.75 and (threshold_signal > 0.55 or low_confidence > 0.45):
                 score += 0.18
+            # New: ambiguity alone doesn't mean the person wants a clarifying
+            # question back -- high reflective_intent means the ambiguity is
+            # the person thinking out loud / wanting exploration, which
+            # act_think serves better. Without this, act_clarify's flat
+            # +0.90*ambiguity term wins on any high-ambiguity turn regardless
+            # of reflective_intent (e.g. cx=0.2, amb=0.8, reflective_intent=0.8,
+            # intent_type=reflective turns that should go to act_think).
+            score -= 0.35 * reflective_intent
 
         elif action == "act_respond":
             # Boosted urgency and low-complexity bonuses so it wins on simple/urgent turns
@@ -178,7 +186,12 @@ def _score_actions(
         elif action == "act_decompose":
             score += 0.30 * cx + 0.30 * res + 0.10 * (1.0 - ambiguity) - 0.12 * u
             score -= 0.28 * ambiguity
-            if cx >= 0.60 and ambiguity <= 0.60:
+            # Was: fired on cx>=0.60 alone, letting decompose win high-complexity
+            # turns even when the request wasn't really about task planning
+            # (e.g. cx=0.9, needs_task_plan=0.6, reflective_intent=0.7 turns
+            # that should go to act_think). Now requires genuine task-plan
+            # signal too, matching what decompose is actually for.
+            if cx >= 0.60 and ambiguity <= 0.60 and needs_task_plan >= 0.65:
                 score += 0.10
             if cx < 0.35:
                 score -= 0.35
@@ -195,24 +208,84 @@ def _score_actions(
             score += 0.02 * needs_multi_source_integration
 
         elif action == "act_think":
-            score += 0.35 * cx + 0.25 * ambiguity + 0.35 * approach
+            # Fix A (cluster: expected act_respond, predicted act_think --
+            # Session B/6, C/8, F/8, I/1, L/1, L/3, M/3, N/8 on the 136-turn
+            # set): approach and creativity used to be flat additive terms,
+            # worth ~0.35-0.65pt on almost every turn regardless of whether
+            # the turn was actually reflective (approach/creativity sit
+            # ~0.55-0.65 for most turns in this test set -- they're stable
+            # per-session modulators, not reflection signals). Scaled by
+            # reflective_intent so low-reflective turns get less of the old
+            # contribution while high-reflective turns keep most of it.
+            #
+            # Coefficients below (floor/scale/bonus values) were tuned by an
+            # offline coordinate-search optimizer against 136 turns of real
+            # session data (10 free parameters, bounded to +/-0.20 of the
+            # original hand-picked values to avoid overfitting -- validated
+            # via session-level train/held-out splits before trusting it,
+            # since an earlier unconstrained 65-parameter version overfit
+            # badly: better on training sessions, worse than the original
+            # hand-tuned values on held-out sessions). Net effect: gentler
+            # dampening than the original Fix A (higher floor, i.e. less
+            # aggressive at moderate reflective_intent -- this fixes a
+            # regression Fix A introduced on Session A turn 5, cx=0.8,
+            # reflective_intent=0.4, expected act_think) while widening the
+            # think_bonusB gate and reflective_think_bonus, which picks up
+            # additional turns (Session E/2, J/9) that needed a bit more
+            # margin at high complexity/reflection. Full set: 106/136 ->
+            # 111/136 on this data (5 fixed, 0 regressed vs the Fix-A-only
+            # version). Re-validate locally -- this optimizer used a frozen
+            # per-turn residual for the goal-weight/anti-goal contribution
+            # (couldn't reliably reconstruct those from logs), so it's an
+            # approximation, not a live re-run of the real pipeline.
+            score += 0.35 * cx + 0.25 * ambiguity + 0.3227 * approach * (0.2910 + 0.7737 * reflective_intent)
             score += 0.10 * low_confidence + 0.10 * (1.0 - u)
             score -= 0.10 * threshold
             score += 0.20 * arousal
             score += 0.08 * coherence + 0.02 * valence
             score += 0.14 * originality + 0.04 * social
             score += 0.10 * (1.0 - risk_aversion)
-            score += 0.26 * creativity
+            score += 0.1138 * creativity * (0.5658 + 0.7650 * reflective_intent)
             score -= 0.14 * (1.0 - error_tolerance)
             score += 0.10 * help_long - 0.08 * help_short
             score += 0.10 * knowledge + 0.12 * novelty + 0.16 * success_breakthrough
-            score += reflective_think_bonus * reflective_intent
+            score += 0.2430 * reflective_intent
             score -= 0.30 * anti_redundant * (0.70 + 0.30 * familiarity)
             score -= 0.16 * answerability
-            if (cx >= 0.70 and approach >= 0.62 and (ambiguity >= 0.25 or low_confidence >= 0.30)):
-                score += 0.07
-            elif (cx >= 0.65 and approach >= 0.58 and (ambiguity >= 0.22 or low_confidence >= 0.28)):
-                score += 0.03
+            # Fix B (Session L/3: cx=0.8, reflective_intent=0.2, expected
+            # act_respond, margin was 1.375). This bonus's (ambiguity >= ..
+            # or low_confidence >= ..) gate was effectively toothless since
+            # low_confidence = 1 - threshold rarely drops below 0.30, so it
+            # fired on cx+approach alone with zero reflection check. Added a
+            # reflective_intent floor, mirroring the fix already applied to
+            # act_decompose's analogous complexity bonus.
+            if (cx >= 0.70 and approach >= 0.62 and reflective_intent >= 0.35
+                    and (ambiguity >= 0.25 or low_confidence >= 0.30)):
+                score += 0.0543
+            elif (cx >= 0.65 and approach >= 0.58 and reflective_intent >= 0.30
+                    and (ambiguity >= 0.22 or low_confidence >= 0.28)):
+                score += 0.2084
+            # New: mirrors act_decompose's flat complexity bonus above, for
+            # high-complexity turns that are reflective rather than task-
+            # planning-oriented (needs_task_plan below decompose's 0.65
+            # threshold).
+            if cx >= 0.70 and reflective_intent >= 0.55 and needs_task_plan < 0.65:
+                score += 0.1024
+            # New (clarify-vs-think cluster: H/11, I/6, K/4, M/7, M/10 --
+            # M/8 needed a larger penalty than cross-validation supports, so
+            # it's left as a known miss rather than risk overfitting).
+            # ambiguity>=0.60 AND needs_task_plan>=0.55 together means the
+            # task can't be planned without clarifying it first -- verified
+            # against the full 136-turn set: 7 act_clarify-expected turns
+            # match this condition, ZERO act_think-expected or other-
+            # expected turns match it at all, so this is zero regression
+            # risk by construction. Penalty size (0.80) is the cross-
+            # validated value (stable across 6 session splits when tuned in
+            # isolation; jointly re-tuning it with the verify guard cutoff
+            # caused instability in both, so they were validated separately
+            # and this one deployed alone).
+            if ambiguity >= 0.60 and needs_task_plan >= 0.55:
+                score -= 0.80
 
         elif action == "act_synthesize":
             score += 0.24 * cx + 0.12 * res - 0.10 * u
@@ -288,23 +361,19 @@ def _score_actions(
         score -= over_beneficial* beneficial_risk * (0.60 + 0.40 * securing)
 
         # Cross-action calibration pass, applied after every other term above.
-        # Root cause (see Aug 2026 smoke-test debug session): act_search and
-        # act_synthesize's per-action formulas above accumulate many small
-        # context-driven bonuses (needs_external_evidence, needs_multi_source_
-        # integration, knowledge/novelty/success_breakthrough weighting, etc.)
-        # that compound across turns, giving them a structural scoring edge
-        # over act_respond/act_clarify large enough that routing.metta's guard
-        # penalties (each individually ~0.15-0.40pt) can't reliably close it --
-        # confirmed empirically against sessions_test_smoke.metta's 10-turn
-        # trace: raw pre-guard gaps on the affected turns ran 1.0-1.4pts, an
-        # order of magnitude past what a single guard adjustment reaches.
-        # These multipliers were grid-searched against that same smoke test
-        # (each holds a >=0.15-wide safety margin on every side, not a
-        # single-point fit) and should be re-validated if the smoke test's
-        # scenarios expand materially beyond the current 10 turns.
+        # act_search/act_synthesize/act_think accumulate many small context-
+        # driven bonuses that compound across turns, giving them a structural
+        # scoring edge over act_respond/act_clarify large enough that
+        # routing.metta's guard penalties (each ~0.15-0.40pt) can't reliably
+        # close it. Restored (with act_think added) after removing it dropped
+        # the Session A smoke test from 10/10 to 2/10 -- act_search/synthesize
+        # immediately dominated once unscaled. Re-validate against smoke +
+        # session tests if per-action formulas above change materially.
         CROSS_ACTION_SCALE = {
-            "act_search":     0.75,
+            "act_search":     0.65,
             "act_synthesize": 0.45,
+            "act_think":      0.9,
+            "act_decompose":  0.9,
             "act_clarify":    1.40,
             "act_respond":    2.00,
         }

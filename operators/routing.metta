@@ -190,6 +190,20 @@
           ($low   (- 1.0 $thr))
           ($_ (println! ("low: "$low)))
 
+          ;; Bug fix: the block-unless condition below used to be
+          ;; (and (>= $thr 0.55) (>= $low 0.40)) -- since $low is just
+          ;; (1.0 - $thr), that reduces to $thr being in [0.55, 0.60], a
+          ;; 5-point-wide band, essentially never satisfied. Confirmed via
+          ;; guard-verify's own debug prints against real session logs.
+          ;; threshold_signal (a separate LLM-parsed appraisal field, not
+          ;; derived from $thr) empirically separates verify-appropriate
+          ;; turns cleanly at >= 0.70 -- validated via session-level
+          ;; cross-validation (stable across 6 random train/held-out splits,
+          ;; beat or matched the old condition in all 6). Replaces the
+          ;; thr/low check below.
+          ($thr_sig (ctx-val $ctx threshold_signal))
+          ($_ (println! ("thr_sig: "$thr_sig)))
+
           ($fw (ctx-val $ctx failure_wariness))
 
           ($_ (println! ("fw: "$fw)))
@@ -206,7 +220,7 @@
           ;; Core block
           ($s1 (if (>= $amb 0.85)
                    (set-action-score $scores act_verify (ACTION_BLOCKED_SCORE))
-                   (if (not (or (== $verify 1) (or (and (>= $thr 0.55) (>= $low 0.40)) (>= $fw 0.45))))
+                   (if (not (or (== $verify 1) (or (>= $thr_sig 0.70) (>= $fw 0.45))))
                        (set-action-score $scores act_verify (ACTION_BLOCKED_SCORE))
                        $scores)))
           ($curr (get-action-score $s1 act_verify)))
