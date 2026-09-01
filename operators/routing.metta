@@ -218,11 +218,27 @@
           ($_ (println! ("intent: "$intent)))
 
           ;; Core block
-          ($s1 (if (>= $amb 0.85)
+          ;; Bug fix #2 (D/1, F/6, G/10): the ambiguity>=0.85 hard block used
+          ;; to be unconditional. All 3 misses at ambiguity>=0.85 have
+          ;; threshold_signal=1.00; every other ambiguity>=0.85 turn in the
+          ;; full 136-turn set (11 of them, correctly resolved as
+          ;; clarify/think) has threshold_signal<=0.60 -- a clean gap, zero
+          ;; overlap. Reuses the same validated 0.70 cutoff. Unblocking
+          ;; alone wasn't enough (act_verify doesn't use threshold_signal in
+          ;; its own score formula, so it stayed unblocked but still lost to
+          ;; act_clarify/act_think, which score highly on the same high-
+          ;; ambiguity signal) -- added a matching bonus, sized against the
+          ;; actual margins needed (0.20/0.16/0.23) plus headroom. Caveat:
+          ;; the block/unblock decision is backed by 14 examples with a
+          ;; clean separation; the 0.35 bonus size is only calibrated
+          ;; against those 3 positive examples' margins.
+          ($s1 (if (and (>= $amb 0.85) (< $thr_sig 0.70))
                    (set-action-score $scores act_verify (ACTION_BLOCKED_SCORE))
                    (if (not (or (== $verify 1) (or (>= $thr_sig 0.70) (>= $fw 0.45))))
                        (set-action-score $scores act_verify (ACTION_BLOCKED_SCORE))
-                       $scores)))
+                       (if (and (and (>= $amb 0.85) (>= $thr_sig 0.70)) (== $verify 0))
+                           (adjust-action-score $scores act_verify 0.35)
+                           $scores))))
           ($curr (get-action-score $s1 act_verify)))
      (if (== $curr (ACTION_BLOCKED_SCORE)) $s1
          (let* (($s2 (if (== $verify 1)

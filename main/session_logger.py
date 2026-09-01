@@ -424,7 +424,7 @@ def write_logs(run_records: Any, base_dir_str: str) -> list:
                 "resolution": f"{_safe_float(post_mods.get('resolution', 0.0)):.4f}",
                 "topic_familiarity": f"{_safe_float(post_mods.get('topic_familiarity', 0.0)):.4f}",
                 "confidence": "",
-                "low_confidence": "",
+                "low_confidence": f"{max(0.0, min(1.0, 1.0 - _safe_float(context.get('threshold')))):.4f}",
                 "over_beneficial": f"{_safe_float(post_goals.get('over_beneficial', 0.0)):.4f}",
                 "over_safety": f"{_safe_float(post_goals.get('over_safety', 0.0)):.4f}",
                 "over_honesty": f"{_safe_float(post_goals.get('over_honesty', 0.0)):.4f}",
