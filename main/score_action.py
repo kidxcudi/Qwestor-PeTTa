@@ -167,6 +167,24 @@ def _score_actions(
             score += 0.12 * needs_multi_source_integration
             score -= 0.08 * needs_task_plan
             score -= reflective_search_penalty * reflective_intent
+            # New (F/8): confirmed zero legitimate act_search win exists
+            # anywhere in the full 136-turn set below needs_external_
+            # evidence=0.8 (the minimum across all 12 act_search-expected
+            # turns) -- so this discount can't overlap with any real search
+            # win. act_search was winning purely on "free" terms unrelated
+            # to its core signal (0.35*threshold, 0.35*(1-familiarity), plus
+            # several wt-sourced terms) even at ext=0.0. This is the same
+            # class of structural issue act_think had before its own
+            # dampening fixes above -- only investigated for this one
+            # scoped condition so far, not the full formula; see the
+            # handoff's "act_search free competitiveness" note for the
+            # broader, not-yet-investigated pattern (still true after this
+            # fix -- e.g. M/3 shifts from wrong-as-search to wrong-as-
+            # clarify, not fixed by this alone). 0.77 nominal here
+            # (CROSS_ACTION_SCALE for act_search is 0.65, so ~0.50 of
+            # actual effect) matches the validated effective value.
+            if needs_external_evidence < 0.5:
+                score -= 0.77
 
         elif action == "act_verify":
             # Toned down the low_confidence bonus so it doesn't beat act_respond on simple turns
@@ -206,6 +224,18 @@ def _score_actions(
             score += 0.24 * needs_task_plan
             score -= 0.12 * needs_external_evidence
             score += 0.02 * needs_multi_source_integration
+            # New (B/8, N/3): act_decompose was winning against act_think
+            # even when needs_task_plan wasn't actually maxed (0.8 and 0.5
+            # respectively). Checked every act_decompose-expected turn in
+            # the full 136-turn set: needs_task_plan is exactly 1.0 for all
+            # 9 of them, no exceptions -- so this discount has zero overlap
+            # risk with any correct decompose win. Sized against the real
+            # margins needed (0.293 and a razor-thin 0.007) with headroom;
+            # 0.45 unscaled (CROSS_ACTION_SCALE=0.9 for this action, so
+            # ~0.40 of actual effect) fixed both with zero regressions
+            # anywhere in the full set.
+            if needs_task_plan < 0.90:
+                score -= 0.45
 
         elif action == "act_think":
             # Fix A (cluster: expected act_respond, predicted act_think --
@@ -252,6 +282,26 @@ def _score_actions(
             score += 0.2430 * reflective_intent
             score -= 0.30 * anti_redundant * (0.70 + 0.30 * familiarity)
             score -= 0.16 * answerability
+            # New (B/6, L/1, F/8; F/8 needed a second pass after the search
+            # discount below revealed think's real post-discount score was
+            # closer to respond than an earlier check of mine had it --
+            # traced to an error in my own analysis, not a code bug;
+            # re-validated directly against a real live run's raw scores
+            # rather than the frozen-residual replay before increasing
+            # this). Confirmed zero correctly-won act_think turn exists
+            # anywhere in the full 136-turn set below complexity=0.5 -- the
+            # only turn that even expects think there (N/2) is already
+            # broken for unrelated reasons (see handoff notes on
+            # appraisal-quality misses). So this discount can't overlap
+            # with any legitimate think win. Deliberately scoped to
+            # cx<0.5 specifically because cx>=0.5..0.8 has a genuine,
+            # confirmed ground-truth conflict (F/7 and G/2 correctly need
+            # think at cx=0.7 with the same low reflective_intent as L/3,
+            # which needs respond at cx=0.8) -- a broader discount would
+            # have risked breaking those two to fix L/3, so L/3 is left
+            # alone on purpose, not an oversight.
+            if cx < 0.5:
+                score -= 1.00
             # Fix B (Session L/3: cx=0.8, reflective_intent=0.2, expected
             # act_respond, margin was 1.375). This bonus's (ambiguity >= ..
             # or low_confidence >= ..) gate was effectively toothless since

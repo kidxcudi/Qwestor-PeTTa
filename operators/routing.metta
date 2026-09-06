@@ -159,25 +159,42 @@
           ($z_v (get-action-score $scores act_synthesize))
           ($_ (println! ("act_synthesize: "$z_v)))
 
-          
+          ($s3 (if (and (> $s_v (ACTION_BLOCKED_SCORE)) (> $d_v (ACTION_BLOCKED_SCORE)))
+                   (if (and (>= $ext 0.70) (and (>= $ext (+ $task 0.15)) (>= $ext (- $multi 0.02))))
+                       (let* (($b1 (adjust-action-score $scores act_search 0.26))
+                              ($b2 (adjust-action-score $b1 act_decompose -0.26))
+                              ($z_bonus (if (> $z_v (ACTION_BLOCKED_SCORE)) -0.12 0.0)))
+                         (adjust-action-score $b2 act_synthesize $z_bonus))
+                       (if (and (>= $task 0.72) (and (>= $task (+ $ext 0.18)) (>= $task (+ $multi 0.12))))
+                           (let* (($b1 (adjust-action-score $scores act_decompose 0.18))
+                                  ($b2 (adjust-action-score $b1 act_search -0.12))
+                                  ($z_bonus (if (> $z_v (ACTION_BLOCKED_SCORE)) -0.10 0.0)))
+                             (adjust-action-score $b2 act_synthesize $z_bonus))
+                           (if (and (> $z_v (ACTION_ACTIVE_FLOOR)) (and (>= $multi 0.72) (>= $multi (+ $task 0.15))))
+                               (let* (($b1 (adjust-action-score $scores act_synthesize 0.16)))
+                                 (adjust-action-score $b1 act_decompose -0.16))
+                               $scores)))
+                   $scores))
           )
- 
-     (if (and (> $s_v (ACTION_BLOCKED_SCORE)) (> $d_v (ACTION_BLOCKED_SCORE)))
-         (if (and (>= $ext 0.70) (and (>= $ext (+ $task 0.15)) (>= $ext (- $multi 0.02))))
-             (let* (($b1 (adjust-action-score $scores act_search 0.26))
-                    ($b2 (adjust-action-score $b1 act_decompose -0.26))
-                    ($z_bonus (if (> $z_v (ACTION_BLOCKED_SCORE)) -0.12 0.0)))
-               (adjust-action-score $b2 act_synthesize $z_bonus))
-             (if (and (>= $task 0.72) (and (>= $task (+ $ext 0.18)) (>= $task (+ $multi 0.12))))
-                 (let* (($b1 (adjust-action-score $scores act_decompose 0.18))
-                        ($b2 (adjust-action-score $b1 act_search -0.12))
-                        ($z_bonus (if (> $z_v (ACTION_BLOCKED_SCORE)) -0.10 0.0)))
-                   (adjust-action-score $b2 act_synthesize $z_bonus))
-                 (if (and (> $z_v (ACTION_ACTIVE_FLOOR)) (and (>= $multi 0.72) (>= $multi (+ $task 0.15))))
-                     (let* (($b1 (adjust-action-score $scores act_synthesize 0.16)))
-                       (adjust-action-score $b1 act_decompose -0.16))
-                     $scores)))
-         $scores)))
+
+     ;; Bug fix (K/7, M/4): the three branches above only fire when
+     ;; act_decompose is ALSO unblocked -- but the search-vs-synthesize case
+     ;; that most needs help is exactly when needs_task_plan is LOW
+     ;; (act_decompose correctly blocked) and needs_multi_source_integration
+     ;; is dominant. Verified against the full 136-turn set: this condition
+     ;; matches K/7 and M/4 and nothing else -- zero overlap (excludes 3
+     ;; act_think-expected turns with multi>=0.90 but ext=0.2, and 6
+     ;; act_search-expected turns with ext and multi both maxed together).
+     ;; Sized with headroom against both the real margins needed
+     ;; (0.719/0.625) and the search/think tie-break in select-action, which
+     ;; can leapfrog a third action by up to intent_margin+0.0001 -- a
+     ;; smaller bonus (0.85) fixed K/7 but not M/4 for exactly this reason.
+     (if (and (> $z_v (ACTION_BLOCKED_SCORE))
+              (and (>= $multi 0.90)
+                   (and (>= $ext 0.50)
+                        (and (>= $multi (+ $ext 0.20)) (<= $task 0.30)))))
+         (adjust-action-score $s3 act_synthesize 1.05)
+         $s3)))
 ;; GUARD: VERIFY
 ;; Decision: Block verify if ambiguity is too high or request is absent.
 (= (guard-verify $scores $ctx $space)

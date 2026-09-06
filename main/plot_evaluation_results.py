@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import re
 from pathlib import Path
 from typing import Any, Iterable
 import warnings
@@ -88,10 +89,9 @@ def load_evaluation(path: Path) -> dict[str, Any]:
 
 
 def short_session_name(session_id: str) -> str:
-    """Convert a session identifier such as ``session_a`` into ``A``."""
-
-    name = session_id.removeprefix("session_")
-    return name.upper() if len(name) <= 3 else name
+    """Convert a session identifier into a compact label for plot axes."""
+    match = re.match(r"^[Ss]ession\s*[ _-]\s*([A-Za-z0-9]+)", session_id)
+    return match.group(1).upper() if match else session_id
 
 
 def action_name(action: str) -> str:
