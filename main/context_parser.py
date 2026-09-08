@@ -261,26 +261,6 @@ def wrap_parser(query):
     from pathlib import Path
     from dotenv import load_dotenv
 
-    # Query-keyed cache, module-level so it survives across repeated
-    # py-call invocations within the same petta process (Janus embeds
-    # Python in-process; module state persists). Added because petta's
-    # Prolog backtracking has been observed to re-invoke this py-call for
-    # the same query multiple times in a single run (real Gemini calls
-    # each time) -- this doesn't fix that underlying backtracking, but it
-    # means a repeat call for a query already seen this process returns
-    # instantly instead of re-hitting the API (and, as a side benefit,
-    # reduces total call volume, which should reduce how often the 429/503
-    # backoff below gets exercised in the first place). Root cause of the
-    # backtracking is still open.
-    global _WRAP_PARSER_CACHE
-    try:
-        _WRAP_PARSER_CACHE
-    except NameError:
-        _WRAP_PARSER_CACHE = {}
-    if query in _WRAP_PARSER_CACHE:
-        print(f"wrap_parser cache hit, skipping Gemini call for: {query!r}")
-        return _WRAP_PARSER_CACHE[query]
-
     print("Rate limit cooldown: sleeping for 4 seconds...")
     time.sleep(4)
 
@@ -373,7 +353,6 @@ def wrap_parser(query):
         elif isinstance(value, (int, float)):
             value = float(value)
         result_list.append([key, value])
-    _WRAP_PARSER_CACHE[query] = result_list
     return result_list
 
 
