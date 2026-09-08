@@ -1,29 +1,9 @@
 """
-Writes the same log/eval file set as MetaMo-Prototype's runner.py +
-run_logger.py, driven from MeTTa turn records passed in via py-call.
-
-Ported fields (verified against a real MetaMo run_20260812_132800):
-    logs/{run_id}/run_meta.json
-    logs/{run_id}/turns.json
-    logs/{run_id}/turns.csv
-    logs/{run_id}/eval/strict_per_turn.json
-    logs/{run_id}/eval/strict_per_session.json
-    logs/{run_id}/eval/strict_overall.json
-    logs/{run_id}/eval/evaluation_results.json
-
-Fields with no MeTTa-side source yet (operators/homeostasis.metta has no
-trigger_count/trigger_keys/mode logic, and full-step does not generate a
-free-text answer) are emitted as null/empty placeholders to keep the JSON
-shape identical to MetaMo's output, per explicit instruction.
-
-evaluation_results.json's schema (turn_count/strict_accuracy/soft_accuracy/
-top3_hit_rate/average_decision_margin/predicted_action_counts/
-expected_action_counts/confusion_matrix/sessions/turns) is ported directly
-from usecase/metrics/qwestor_eval.py's _metrics_for/_build_evaluation.
-write_logs calls plot_evaluation_results.save_figures() directly on that
-same dict at the end of every run (best-effort, never fails the run itself),
-so logs/{run_id}/eval/plots/*.png are produced automatically -- no separate
-manual `python plot_evaluation_results.py` step needed.
+Writes the MetaMo-Prototype-compatible run/eval log files (run_meta.json,
+turns.json/csv, eval/*.json) from MeTTa turn records passed in via py-call,
+and auto-generates the eval plots at the end of every run. Fields with no
+MeTTa-side source yet are emitted as null/empty placeholders to keep the
+JSON shape identical to MetaMo's output.
 """
 
 from __future__ import annotations
@@ -128,13 +108,9 @@ def _safe_float(val):
         return 0.0
 
 def _pairs_to_dict(pairs: Any, strip_prefix: str = "") -> dict:
-    """MeTTa association lists arrive as nested lists/tuples of
-    [key, value] (mirroring context_parser.wrap_parser's own return
-    convention). Normalize whatever shape py-call hands us into a dict.
-    Modulator keys carry an m_ prefix on the MeTTa side (m_urgency) but
-    the real turns.json sample uses unprefixed names (urgency) - strip
-    it here so the ported output matches MetaMo's field names exactly.
-    """
+    """Normalizes MeTTa [key, value] association lists into a dict
+    (mirroring wrap_parser's return convention). Modulator keys carry an
+    m_ prefix on the MeTTa side; strip it to match MetaMo's field names."""
     out: dict = {}
     if not pairs:
         return out
@@ -163,20 +139,8 @@ def _floatify(d: dict, keys: list[str]) -> dict:
 
 def _score_top3_from_sorted(sorted_scores: Any) -> list[list]:
     """Normalizes and re-sorts entries into the top 3 [action_name, score]
-    pairs, highest score first.
-
-    operators/decision.metta's sort_scores (line 758) builds
-    ($score act_name) pairs -- score first, name second -- the reverse of
-    the (name, score) convention this function originally assumed. That
-    mismatch meant float(score) always raised trying to convert the action
-    name string, got swallowed by the except below, and every entry was
-    silently dropped: score_top3 (and downstream decision_margin /
-    top3_hit_rate) have been empty in every run so far, going back to at
-    least run_20260820_014750. Detecting orientation per-entry fixes the
-    immediate bug; explicitly re-sorting here (rather than trusting
-    incoming order) also sidesteps needing to confirm which direction
-    MeTTa's `sort` builtin orders ascending vs descending.
-    """
+    pairs, highest first. Detects (score, name) vs (name, score) orientation
+    per-entry, since decision.metta's sort_scores emits (score, name)."""
     parsed: list[tuple[str, float]] = []
     if not sorted_scores:
         return []
@@ -208,9 +172,8 @@ def _format_score_top3_text(score_top3: list[list]) -> str:
 
 
 def _decision_margin(score_top3: list[list]) -> float | None:
-    """Top-1 minus top-2 score, the same quantity manually eyeballed in
-    debug notes ('search 2.97 vs think 2.81'). None when fewer than two
-    candidates were scored."""
+    """Top-1 minus top-2 score. None when fewer than two candidates
+    were scored."""
     if len(score_top3) < 2:
         return None
     try:
@@ -544,14 +507,9 @@ def write_logs(run_records: Any, base_dir_str: str) -> list:
     print(f"Saved eval files to {eval_dir}")
     print(f"Saved logs to {logs_dir}")
 
-    # Auto-plot: fires every time this function runs, regardless of whether
-    # it's invoked via run-tests.sh, a raw `petta` call, or anything else,
-    # since it's a direct in-process call rather than something that needs
-    # separate shell wiring. save_figures() takes the evaluation_results
-    # dict we already built above -- no need to re-read the JSON we just
-    # wrote. Wrapped defensively: a plotting failure (missing matplotlib,
-    # unexpected data shape, etc.) must never take down the actual eval run
-    # that produced the numbers in the first place.
+    # Auto-plot: best-effort, so a plotting failure never takes down the
+    # eval run that produced the numbers. Reuses the evaluation_results
+    # dict already built above rather than re-reading the JSON just written.
     try:
         import sys as _sys
         _main_dir = str(Path(__file__).resolve().parent)

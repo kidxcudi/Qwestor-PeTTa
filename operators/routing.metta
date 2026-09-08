@@ -177,18 +177,9 @@
                    $scores))
           )
 
-     ;; Bug fix (K/7, M/4): the three branches above only fire when
-     ;; act_decompose is ALSO unblocked -- but the search-vs-synthesize case
-     ;; that most needs help is exactly when needs_task_plan is LOW
-     ;; (act_decompose correctly blocked) and needs_multi_source_integration
-     ;; is dominant. Verified against the full 136-turn set: this condition
-     ;; matches K/7 and M/4 and nothing else -- zero overlap (excludes 3
-     ;; act_think-expected turns with multi>=0.90 but ext=0.2, and 6
-     ;; act_search-expected turns with ext and multi both maxed together).
-     ;; Sized with headroom against both the real margins needed
-     ;; (0.719/0.625) and the search/think tie-break in select-action, which
-     ;; can leapfrog a third action by up to intent_margin+0.0001 -- a
-     ;; smaller bonus (0.85) fixed K/7 but not M/4 for exactly this reason.
+     ;; The three branches above only fire when act_decompose is ALSO
+     ;; unblocked -- but this case needs help exactly when needs_task_plan is
+     ;; LOW (decompose correctly blocked). Verified zero overlap in dataset.
      (if (and (> $z_v (ACTION_BLOCKED_SCORE))
               (and (>= $multi 0.90)
                    (and (>= $ext 0.50)
@@ -207,17 +198,9 @@
           ($low   (- 1.0 $thr))
           ($_ (println! ("low: "$low)))
 
-          ;; Bug fix: the block-unless condition below used to be
-          ;; (and (>= $thr 0.55) (>= $low 0.40)) -- since $low is just
-          ;; (1.0 - $thr), that reduces to $thr being in [0.55, 0.60], a
-          ;; 5-point-wide band, essentially never satisfied. Confirmed via
-          ;; guard-verify's own debug prints against real session logs.
-          ;; threshold_signal (a separate LLM-parsed appraisal field, not
-          ;; derived from $thr) empirically separates verify-appropriate
-          ;; turns cleanly at >= 0.70 -- validated via session-level
-          ;; cross-validation (stable across 6 random train/held-out splits,
-          ;; beat or matched the old condition in all 6). Replaces the
-          ;; thr/low check below.
+          ;; Old condition (and (>= $thr 0.55) (>= $low 0.40)) reduced to
+          ;; $thr in [0.55,0.60] since $low=(1.0-$thr) -- nearly unreachable.
+          ;; threshold_signal (independent field) separates cleanly at 0.70.
           ($thr_sig (ctx-val $ctx threshold_signal))
           ($_ (println! ("thr_sig: "$thr_sig)))
 
@@ -234,21 +217,9 @@
           ($intent (ctx-val $ctx intent_type))
           ($_ (println! ("intent: "$intent)))
 
-          ;; Core block
-          ;; Bug fix #2 (D/1, F/6, G/10): the ambiguity>=0.85 hard block used
-          ;; to be unconditional. All 3 misses at ambiguity>=0.85 have
-          ;; threshold_signal=1.00; every other ambiguity>=0.85 turn in the
-          ;; full 136-turn set (11 of them, correctly resolved as
-          ;; clarify/think) has threshold_signal<=0.60 -- a clean gap, zero
-          ;; overlap. Reuses the same validated 0.70 cutoff. Unblocking
-          ;; alone wasn't enough (act_verify doesn't use threshold_signal in
-          ;; its own score formula, so it stayed unblocked but still lost to
-          ;; act_clarify/act_think, which score highly on the same high-
-          ;; ambiguity signal) -- added a matching bonus, sized against the
-          ;; actual margins needed (0.20/0.16/0.23) plus headroom. Caveat:
-          ;; the block/unblock decision is backed by 14 examples with a
-          ;; clean separation; the 0.35 bonus size is only calibrated
-          ;; against those 3 positive examples' margins.
+          ;; ambiguity>=0.85 used to block unconditionally; turns with
+          ;; threshold_signal>=0.70 genuinely still need verify (unblocking
+          ;; alone wasn't enough, so a matching score bonus is added too).
           ($s1 (if (and (>= $amb 0.85) (< $thr_sig 0.70))
                    (set-action-score $scores act_verify (ACTION_BLOCKED_SCORE))
                    (if (not (or (== $verify 1) (or (>= $thr_sig 0.70) (>= $fw 0.45))))

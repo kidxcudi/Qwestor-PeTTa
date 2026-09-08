@@ -1,11 +1,7 @@
 ; ─────────────────────────────────────────────
 ; main/session-eval.metta
-;
-; Shared session-grading helpers used by both main/test/sessions_test.metta
-; (full run) and main/test/sessions_test_smoke.metta (single-session smoke
-; test). Kept separate from engine-step.metta since these functions are
-; specific to turn-by-turn evaluation/snapshotting, not the core engine
-; step itself.
+; Turn-by-turn evaluation/snapshotting helpers, kept separate from
+; engine-step.metta since they're specific to grading, not the core step.
 ; ─────────────────────────────────────────────
 
 !(import! &self engine-step)
@@ -47,11 +43,9 @@
 )
 
 
-; case-based extractors over full-step's ($best $style $appraisal $sorted)
-; return - same confirmed-working pattern as engine-step.metta's
-; extract-best/extract-sorted (see reduction_probe3.metta Probe A).
-; index-atom on a let*-bound call result was observed extracting from
-; the unreduced call term instead of the actual returned value.
+; case-based extraction over full-step's return, mirroring engine-step.metta's
+; own pattern: index-atom on a let*-bound call result was observed pulling
+; from the unreduced call term instead of the actual returned value.
 (= (step-predicted $result)
    (case $result
      (

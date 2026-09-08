@@ -372,9 +372,6 @@ def plot_session_outcomes(axis: plt.Axes, evaluation: dict[str, Any]) -> None:
     style_axis(axis)
 
 
-import warnings
-warnings.filterwarnings("ignore", category=UserWarning)
-
 def save_figures(
     evaluation: dict[str, Any],
     output_dir: Path,
@@ -383,14 +380,12 @@ def save_figures(
     output_dir.mkdir(parents=True, exist_ok=True)
 
     session_path = output_dir / "per_session_analysis.png"
-    # Increased figsize slightly to give more room
     session_figure, session_axes = plt.subplots(2, 2, figsize=(22, 14))
     plot_session_accuracy(session_axes[0, 0], evaluation)
     plot_session_metrics(session_axes[0, 1], evaluation)
     plot_session_margins(session_axes[1, 0], evaluation)
     plot_session_outcomes(session_axes[1, 1], evaluation)
     session_figure.suptitle("Per-Session Evaluation Analysis", fontsize=19, y=0.995)
-    # Replaced tight_layout with subplots_adjust
     session_figure.subplots_adjust(top=0.93, bottom=0.08, left=0.06, right=0.97, hspace=0.4, wspace=0.3)
     session_figure.savefig(session_path, dpi=dpi, bbox_inches="tight")
     plt.close(session_figure)
@@ -404,7 +399,6 @@ def save_figures(
     plot_action_recall(overall_figure.add_subplot(grid[1, 1]), evaluation)
     plot_confusion_matrix(overall_figure.add_subplot(grid[2, :]), evaluation)
     overall_figure.suptitle("Overall and Per-Action Evaluation Analysis", fontsize=19, y=0.995)
-    # Replaced tight_layout with subplots_adjust
     overall_figure.subplots_adjust(top=0.95, bottom=0.05, left=0.06, right=0.96, hspace=0.4, wspace=0.3)
     overall_figure.savefig(overall_path, dpi=dpi, bbox_inches="tight")
     plt.close(overall_figure)

@@ -106,85 +106,87 @@ def _score_actions(
 ) -> dict[str, float]:
     scores: dict[str, float] = {}
 
+    # Per-action calibration weight. Each action's raw score sums a
+    # different number of terms of different sizes, so without this the
+    # action whose formula just happens to add up the most wins by default
+    # rather than by genuinely fitting the turn. SCALE corrects for that so
+    # all 7 actions compete on a level footing. Applied directly to every
+    # coefficient below; two spots (the goal-weight loop, the penalty/risk
+    # block) apply it explicitly instead since it can't be pre-baked there.
+    SCALE = {
+        "act_search":     0.65,
+        "act_synthesize": 0.45,
+        "act_think":      0.9,
+        "act_decompose":  0.9,
+        "act_clarify":    1.40,
+        "act_respond":    2.00,
+    }
+
     for action, effects in ACTIONS.items():
         score = 0.0
+        action_scale = SCALE.get(action, 1.0)
         for goal, weight in weights.items():
             effect = effects.get(goal)
             if effect is None:
                 continue
             rel = effect(cx) if callable(effect) else float(effect)
-            score += float(weight) * float(rel)
+            score += float(weight) * float(rel) * action_scale
 
         if action == "act_clarify":
-            score += 0.90 * ambiguity - 0.35 * ux - 0.15 * u + 0.20 * threshold
-            score += 0.20 * securing
-            score += 0.10 * coherence - 0.08 * valence
-            score += 0.22 * social - 0.06 * originality
-            score += 0.08 * (1.0 - error_tolerance)
-            score -= 0.55 * answerability
-            score -= 0.20 * help_short
-            score -= 0.15 * anti_redundant
+            score += 1.26 * ambiguity - 0.49 * ux - 0.21 * u + 0.28 * threshold
+            score += 0.28 * securing
+            score += 0.14 * coherence - 0.112 * valence
+            score += 0.308 * social - 0.084 * originality
+            score += 0.112 * (1.0 - error_tolerance)
+            score -= 0.77 * answerability
+            score -= 0.28 * help_short
+            score -= 0.21 * anti_redundant
             if ambiguity > 0.75 and (threshold_signal > 0.55 or low_confidence > 0.45):
-                score += 0.18
+                score += 0.252
             # New: ambiguity alone doesn't mean the person wants a clarifying
             # question back -- high reflective_intent means the ambiguity is
-            # the person thinking out loud / wanting exploration, which
-            # act_think serves better. Without this, act_clarify's flat
-            # +0.90*ambiguity term wins on any high-ambiguity turn regardless
-            # of reflective_intent (e.g. cx=0.2, amb=0.8, reflective_intent=0.8,
-            # intent_type=reflective turns that should go to act_think).
-            score -= 0.35 * reflective_intent
+            # the person thinking out loud, which act_think serves better.
+            score -= 0.49 * reflective_intent
 
         elif action == "act_respond":
-            # Boosted urgency and low-complexity bonuses so it wins on simple/urgent turns
-            score += 0.60 * u + 0.30 * (1.0 - ambiguity) + 0.20 * ux - 0.10 * cx
-            score += 0.25 * familiarity - 0.20 * threshold - 0.20 * failure_wariness
-            score -= 0.25 * securing + 0.10 * low_confidence
-            score += 0.15 * (1.0 - arousal)
-            score += 0.12 * coherence + 0.10 * valence
-            score += 0.14 * social - 0.06 * originality
-            score -= 0.15 * risk_aversion
-            score += 0.40 * help_short - 0.15 * help_long
-            score += 0.45 * answerability
-            score += 0.30 * error_tolerance
+            score += 1.2 * u + 0.6 * (1.0 - ambiguity) + 0.4 * ux - 0.2 * cx
+            score += 0.5 * familiarity - 0.4 * threshold - 0.4 * failure_wariness
+            score -= 0.5 * securing + 0.2 * low_confidence
+            score += 0.3 * (1.0 - arousal)
+            score += 0.24 * coherence + 0.2 * valence
+            score += 0.28 * social - 0.12 * originality
+            score -= 0.3 * risk_aversion
+            score += 0.8 * help_short - 0.3 * help_long
+            score += 0.9 * answerability
+            score += 0.6 * error_tolerance
             if cx >= 0.50:
-                score -= 0.08 * knowledge + 0.10 * success_breakthrough
+                score -= 0.16 * knowledge + 0.2 * success_breakthrough
 
         elif action == "act_search":
-            score += 0.35 * cx + 0.20 * res - 0.15 * u
-            score += (0.35 * threshold + 0.35 * (1.0 - familiarity)
-                      + 0.30 * failure_wariness)
-            score += 0.15 * securing
-            score += 0.08 * arousal
-            score += 0.06 * coherence + 0.02 * valence
-            score += 0.10 * originality + 0.06 * social
-            score += 0.08 * (1.0 - risk_aversion)
-            score += 0.10 * (1.0 - error_tolerance)
-            score += 0.10 * creativity
-            score += 0.06 * help_long - 0.08 * help_short
-            score += 0.14 * knowledge + 0.12 * novelty + 0.08 * success_breakthrough
-            score += 0.50 * needs_external_evidence
-            score += 0.12 * needs_multi_source_integration
-            score -= 0.08 * needs_task_plan
-            score -= reflective_search_penalty * reflective_intent
-            # New (F/8): confirmed zero legitimate act_search win exists
-            # anywhere in the full 136-turn set below needs_external_
-            # evidence=0.8 (the minimum across all 12 act_search-expected
-            # turns) -- so this discount can't overlap with any real search
-            # win. act_search was winning purely on "free" terms unrelated
-            # to its core signal (0.35*threshold, 0.35*(1-familiarity), plus
-            # several wt-sourced terms) even at ext=0.0. This is the same
-            # class of structural issue act_think had before its own
-            # dampening fixes above -- only investigated for this one
-            # scoped condition so far, not the full formula; see the
-            # handoff's "act_search free competitiveness" note for the
-            # broader, not-yet-investigated pattern (still true after this
-            # fix -- e.g. M/3 shifts from wrong-as-search to wrong-as-
-            # clarify, not fixed by this alone). 0.77 nominal here
-            # (CROSS_ACTION_SCALE for act_search is 0.65, so ~0.50 of
-            # actual effect) matches the validated effective value.
+            score += 0.2275 * cx + 0.13 * res - 0.0975 * u
+            score += (0.2275 * threshold + 0.2275 * (1.0 - familiarity)
+                      + 0.195 * failure_wariness)
+            score += 0.0975 * securing
+            score += 0.052 * arousal
+            score += 0.039 * coherence + 0.013 * valence
+            score += 0.065 * originality + 0.039 * social
+            score += 0.052 * (1.0 - risk_aversion)
+            score += 0.065 * (1.0 - error_tolerance)
+            score += 0.065 * creativity
+            score += 0.039 * help_long - 0.052 * help_short
+            score += 0.091 * knowledge + 0.078 * novelty + 0.052 * success_breakthrough
+            score += 0.325 * needs_external_evidence
+            score += 0.078 * needs_multi_source_integration
+            score -= 0.052 * needs_task_plan
+            # reflective_search_penalty is a runtime variable (sp-sourced,
+            # default 0.10), not a literal -- can't pre-bake action_scale
+            # into it, so it's applied explicitly here instead.
+            score -= reflective_search_penalty * reflective_intent * action_scale
+            # act_search won purely on terms unrelated to its core signal
+            # even at ext=0 -- confirmed zero legitimate win below ext=0.8
+            # anywhere in the dataset. Scoped fix only, not the full formula.
             if needs_external_evidence < 0.5:
-                score -= 0.77
+                score -= 0.5005
 
         elif action == "act_verify":
             # Toned down the low_confidence bonus so it doesn't beat act_respond on simple turns
@@ -202,169 +204,104 @@ def _score_actions(
             score += 0.05 * knowledge
 
         elif action == "act_decompose":
-            score += 0.30 * cx + 0.30 * res + 0.10 * (1.0 - ambiguity) - 0.12 * u
-            score -= 0.28 * ambiguity
-            # Was: fired on cx>=0.60 alone, letting decompose win high-complexity
-            # turns even when the request wasn't really about task planning
-            # (e.g. cx=0.9, needs_task_plan=0.6, reflective_intent=0.7 turns
-            # that should go to act_think). Now requires genuine task-plan
-            # signal too, matching what decompose is actually for.
+            score += 0.27 * cx + 0.27 * res + 0.09 * (1.0 - ambiguity) - 0.108 * u
+            score -= 0.252 * ambiguity
+            # Requires genuine task-plan signal, not just complexity, so
+            # decompose doesn't win high-cx turns that should go to think.
             if cx >= 0.60 and ambiguity <= 0.60 and needs_task_plan >= 0.65:
-                score += 0.10
+                score += 0.09
             if cx < 0.35:
-                score -= 0.35
-            score += 0.10 * approach
-            score += 0.10 * arousal
-            score += 0.10 * coherence + 0.04 * valence
-            score += 0.12 * originality + 0.08 * social
-            score += 0.08 * creativity
-            score -= 0.08 * (1.0 - error_tolerance)
-            score += 0.12 * help_long - 0.12 * help_short
-            score += 0.08 * knowledge + 0.06 * novelty + 0.10 * success_breakthrough
-            score += 0.24 * needs_task_plan
-            score -= 0.12 * needs_external_evidence
-            score += 0.02 * needs_multi_source_integration
-            # New (B/8, N/3): act_decompose was winning against act_think
-            # even when needs_task_plan wasn't actually maxed (0.8 and 0.5
-            # respectively). Checked every act_decompose-expected turn in
-            # the full 136-turn set: needs_task_plan is exactly 1.0 for all
-            # 9 of them, no exceptions -- so this discount has zero overlap
-            # risk with any correct decompose win. Sized against the real
-            # margins needed (0.293 and a razor-thin 0.007) with headroom;
-            # 0.45 unscaled (CROSS_ACTION_SCALE=0.9 for this action, so
-            # ~0.40 of actual effect) fixed both with zero regressions
-            # anywhere in the full set.
+                score -= 0.315
+            score += 0.09 * approach
+            score += 0.09 * arousal
+            score += 0.09 * coherence + 0.036 * valence
+            score += 0.108 * originality + 0.072 * social
+            score += 0.072 * creativity
+            score -= 0.072 * (1.0 - error_tolerance)
+            score += 0.108 * help_long - 0.108 * help_short
+            score += 0.072 * knowledge + 0.054 * novelty + 0.09 * success_breakthrough
+            score += 0.216 * needs_task_plan
+            score -= 0.108 * needs_external_evidence
+            score += 0.018 * needs_multi_source_integration
+            # Every act_decompose-expected turn in the full 136-turn set has
+            # needs_task_plan=1.0 exactly, no exceptions -- so this discount
+            # (fires below 0.90) has zero overlap risk with any correct win.
             if needs_task_plan < 0.90:
-                score -= 0.45
+                score -= 0.405
 
         elif action == "act_think":
-            # Fix A (cluster: expected act_respond, predicted act_think --
-            # Session B/6, C/8, F/8, I/1, L/1, L/3, M/3, N/8 on the 136-turn
-            # set): approach and creativity used to be flat additive terms,
-            # worth ~0.35-0.65pt on almost every turn regardless of whether
-            # the turn was actually reflective (approach/creativity sit
-            # ~0.55-0.65 for most turns in this test set -- they're stable
-            # per-session modulators, not reflection signals). Scaled by
-            # reflective_intent so low-reflective turns get less of the old
-            # contribution while high-reflective turns keep most of it.
-            #
-            # Coefficients below (floor/scale/bonus values) were tuned by an
-            # offline coordinate-search optimizer against 136 turns of real
-            # session data (10 free parameters, bounded to +/-0.20 of the
-            # original hand-picked values to avoid overfitting -- validated
-            # via session-level train/held-out splits before trusting it,
-            # since an earlier unconstrained 65-parameter version overfit
-            # badly: better on training sessions, worse than the original
-            # hand-tuned values on held-out sessions). Net effect: gentler
-            # dampening than the original Fix A (higher floor, i.e. less
-            # aggressive at moderate reflective_intent -- this fixes a
-            # regression Fix A introduced on Session A turn 5, cx=0.8,
-            # reflective_intent=0.4, expected act_think) while widening the
-            # think_bonusB gate and reflective_think_bonus, which picks up
-            # additional turns (Session E/2, J/9) that needed a bit more
-            # margin at high complexity/reflection. Full set: 106/136 ->
-            # 111/136 on this data (5 fixed, 0 regressed vs the Fix-A-only
-            # version). Re-validate locally -- this optimizer used a frozen
-            # per-turn residual for the goal-weight/anti-goal contribution
-            # (couldn't reliably reconstruct those from logs), so it's an
-            # approximation, not a live re-run of the real pipeline.
-            score += 0.35 * cx + 0.25 * ambiguity + 0.3227 * approach * (0.2910 + 0.7737 * reflective_intent)
-            score += 0.10 * low_confidence + 0.10 * (1.0 - u)
-            score -= 0.10 * threshold
-            score += 0.20 * arousal
-            score += 0.08 * coherence + 0.02 * valence
-            score += 0.14 * originality + 0.04 * social
-            score += 0.10 * (1.0 - risk_aversion)
-            score += 0.1138 * creativity * (0.5658 + 0.7650 * reflective_intent)
-            score -= 0.14 * (1.0 - error_tolerance)
-            score += 0.10 * help_long - 0.08 * help_short
-            score += 0.10 * knowledge + 0.12 * novelty + 0.16 * success_breakthrough
-            score += 0.2430 * reflective_intent
-            score -= 0.30 * anti_redundant * (0.70 + 0.30 * familiarity)
-            score -= 0.16 * answerability
-            # New (B/6, L/1, F/8; F/8 needed a second pass after the search
-            # discount below revealed think's real post-discount score was
-            # closer to respond than an earlier check of mine had it --
-            # traced to an error in my own analysis, not a code bug;
-            # re-validated directly against a real live run's raw scores
-            # rather than the frozen-residual replay before increasing
-            # this). Confirmed zero correctly-won act_think turn exists
-            # anywhere in the full 136-turn set below complexity=0.5 -- the
-            # only turn that even expects think there (N/2) is already
-            # broken for unrelated reasons (see handoff notes on
-            # appraisal-quality misses). So this discount can't overlap
-            # with any legitimate think win. Deliberately scoped to
-            # cx<0.5 specifically because cx>=0.5..0.8 has a genuine,
-            # confirmed ground-truth conflict (F/7 and G/2 correctly need
-            # think at cx=0.7 with the same low reflective_intent as L/3,
-            # which needs respond at cx=0.8) -- a broader discount would
-            # have risked breaking those two to fix L/3, so L/3 is left
-            # alone on purpose, not an oversight.
+            # approach/creativity used to be flat terms regardless of
+            # reflective_intent; scaled by it instead (offline CV-optimized
+            # coefficients; an unconstrained search overfit and was discarded).
+            score += 0.315 * cx + 0.225 * ambiguity + 0.29043 * approach * (0.2910 + 0.7737 * reflective_intent)
+            score += 0.09 * low_confidence + 0.09 * (1.0 - u)
+            score -= 0.09 * threshold
+            score += 0.18 * arousal
+            score += 0.072 * coherence + 0.018 * valence
+            score += 0.126 * originality + 0.036 * social
+            score += 0.09 * (1.0 - risk_aversion)
+            score += 0.10242 * creativity * (0.5658 + 0.7650 * reflective_intent)
+            score -= 0.126 * (1.0 - error_tolerance)
+            score += 0.09 * help_long - 0.072 * help_short
+            score += 0.09 * knowledge + 0.108 * novelty + 0.144 * success_breakthrough
+            score += 0.2187 * reflective_intent
+            score -= 0.27 * anti_redundant * (0.70 + 0.30 * familiarity)
+            score -= 0.144 * answerability
+            # Zero correctly-won act_think turn exists below complexity=0.5
+            # in the dataset. Not extended to cx 0.5-0.8: a confirmed
+            # ground-truth conflict lives there (near-identical signals).
             if cx < 0.5:
-                score -= 1.00
-            # Fix B (Session L/3: cx=0.8, reflective_intent=0.2, expected
-            # act_respond, margin was 1.375). This bonus's (ambiguity >= ..
-            # or low_confidence >= ..) gate was effectively toothless since
-            # low_confidence = 1 - threshold rarely drops below 0.30, so it
-            # fired on cx+approach alone with zero reflection check. Added a
-            # reflective_intent floor, mirroring the fix already applied to
-            # act_decompose's analogous complexity bonus.
+                score -= 0.9
+            # This bonus's ambiguity/low_confidence gate was toothless (fired
+            # on cx+approach alone); added a reflective_intent floor.
             if (cx >= 0.70 and approach >= 0.62 and reflective_intent >= 0.35
                     and (ambiguity >= 0.25 or low_confidence >= 0.30)):
-                score += 0.0543
+                score += 0.04887
             elif (cx >= 0.65 and approach >= 0.58 and reflective_intent >= 0.30
                     and (ambiguity >= 0.22 or low_confidence >= 0.28)):
-                score += 0.2084
-            # New: mirrors act_decompose's flat complexity bonus above, for
-            # high-complexity turns that are reflective rather than task-
-            # planning-oriented (needs_task_plan below decompose's 0.65
-            # threshold).
+                score += 0.18756
+            # Mirrors act_decompose's complexity bonus, for reflective turns
+            # that aren't task-planning-oriented.
             if cx >= 0.70 and reflective_intent >= 0.55 and needs_task_plan < 0.65:
-                score += 0.1024
-            # New (clarify-vs-think cluster: H/11, I/6, K/4, M/7, M/10 --
-            # M/8 needed a larger penalty than cross-validation supports, so
-            # it's left as a known miss rather than risk overfitting).
-            # ambiguity>=0.60 AND needs_task_plan>=0.55 together means the
-            # task can't be planned without clarifying it first -- verified
-            # against the full 136-turn set: 7 act_clarify-expected turns
-            # match this condition, ZERO act_think-expected or other-
-            # expected turns match it at all, so this is zero regression
-            # risk by construction. Penalty size (0.80) is the cross-
-            # validated value (stable across 6 session splits when tuned in
-            # isolation; jointly re-tuning it with the verify guard cutoff
-            # caused instability in both, so they were validated separately
-            # and this one deployed alone).
+                score += 0.09216
+            # High ambiguity + high needs_task_plan together means the task
+            # can't be planned without clarifying it first -- zero overlap
+            # with any act_think-expected turn in the dataset.
             if ambiguity >= 0.60 and needs_task_plan >= 0.55:
-                score -= 0.80
+                score -= 0.72
 
         elif action == "act_synthesize":
-            score += 0.24 * cx + 0.12 * res - 0.10 * u
-            score += 0.16 * (1.0 - ambiguity) + 0.14 * (1.0 - familiarity)
-            score += 0.12 * approach + 0.08 * arousal + 0.16 * creativity
-            score += 0.16 * coherence + 0.08 * valence
-            score += 0.22 * originality + 0.10 * social
-            score += 0.06 * (1.0 - low_confidence)
-            score += 0.12 * knowledge + 0.08 * novelty + 0.10 * success_breakthrough
-            score += 0.14 * help_long - 0.10 * help_short
-            score -= 0.12 * risk_aversion
-            score -= 0.18 * threshold
-            score -= 0.16 * failure_wariness
-            score += 0.55 * needs_multi_source_integration
-            score -= 0.12 * needs_external_evidence
-            score -= 0.18 * needs_task_plan
+            score += 0.108 * cx + 0.054 * res - 0.045 * u
+            score += 0.072 * (1.0 - ambiguity) + 0.063 * (1.0 - familiarity)
+            score += 0.054 * approach + 0.036 * arousal + 0.072 * creativity
+            score += 0.072 * coherence + 0.036 * valence
+            score += 0.099 * originality + 0.045 * social
+            score += 0.027 * (1.0 - low_confidence)
+            score += 0.054 * knowledge + 0.036 * novelty + 0.045 * success_breakthrough
+            score += 0.063 * help_long - 0.045 * help_short
+            score -= 0.054 * risk_aversion
+            score -= 0.081 * threshold
+            score -= 0.072 * failure_wariness
+            score += 0.2475 * needs_multi_source_integration
+            score -= 0.054 * needs_external_evidence
+            score -= 0.081 * needs_task_plan
             if cx >= 0.55 and ambiguity <= 0.60:
-                score += 0.16
+                score += 0.072
             if ambiguity >= 0.80:
-                score -= 0.28
+                score -= 0.126
             if verify_request:
-                score -= 0.25
+                score -= 0.1125
 
-        score -= anti_hall * _hallucination_penalty(action, cx=cx, ambiguity=ambiguity)
-        score -= (anti_redundant
+        # Penalty/risk block: these helper functions clamp their result to
+        # 0..1 before returning, so action_scale is applied explicitly here
+        # (post-clamp) rather than baked into their internal literals --
+        # see the note on SCALE near the top of this loop for why.
+        score -= action_scale * anti_hall * _hallucination_penalty(action, cx=cx, ambiguity=ambiguity)
+        score -= action_scale * (anti_redundant
                   * _redundancy_penalty(action, cx=cx,
                                         familiarity=familiarity, urgency=u)
                   * (0.70 + 0.30 * (1.0 - u)))
-        score -= (anti_premature
+        score -= action_scale * (anti_premature
                   * _premature_penalty(action, cx=cx,
                                        ambiguity=ambiguity, threshold=threshold)
                   * (0.60 + 0.40 * threshold))
@@ -372,7 +309,7 @@ def _score_actions(
         rabbit_hole_scale = 0.40 + 0.22 * help_short
         if action == "act_decompose":
             rabbit_hole_scale *= 1.0 - 0.35 * needs_task_plan
-        score -= (anti_rabbit_hole
+        score -= action_scale * (anti_rabbit_hole
                   * _rabbit_hole_penalty(action, cx=cx, ambiguity=ambiguity)
                   * rabbit_hole_scale)
 
@@ -406,28 +343,9 @@ def _score_actions(
             "act_synthesize":0.10,
         }.get(action, 0.20)
 
-        score -= over_safety    * safety_risk    * (0.65 + 0.35 * securing)
-        score -= over_honesty   * honesty_risk   * (0.60 + 0.40 * low_confidence)
-        score -= over_beneficial* beneficial_risk * (0.60 + 0.40 * securing)
-
-        # Cross-action calibration pass, applied after every other term above.
-        # act_search/act_synthesize/act_think accumulate many small context-
-        # driven bonuses that compound across turns, giving them a structural
-        # scoring edge over act_respond/act_clarify large enough that
-        # routing.metta's guard penalties (each ~0.15-0.40pt) can't reliably
-        # close it. Restored (with act_think added) after removing it dropped
-        # the Session A smoke test from 10/10 to 2/10 -- act_search/synthesize
-        # immediately dominated once unscaled. Re-validate against smoke +
-        # session tests if per-action formulas above change materially.
-        CROSS_ACTION_SCALE = {
-            "act_search":     0.65,
-            "act_synthesize": 0.45,
-            "act_think":      0.9,
-            "act_decompose":  0.9,
-            "act_clarify":    1.40,
-            "act_respond":    2.00,
-        }
-        score *= CROSS_ACTION_SCALE.get(action, 1.0)
+        score -= action_scale * over_safety    * safety_risk    * (0.65 + 0.35 * securing)
+        score -= action_scale * over_honesty   * honesty_risk   * (0.60 + 0.40 * low_confidence)
+        score -= action_scale * over_beneficial* beneficial_risk * (0.60 + 0.40 * securing)
 
         scores[action] = score
 

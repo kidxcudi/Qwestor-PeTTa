@@ -38,31 +38,16 @@ def _escape(text):
 
 
 def load_sessions_full(limit=None, names=None):
-    """Return every session as a MeTTa cons-list of turn records:
-
-    (Cons
-      (Session "<name>"
-        (Cons (Turn "<query>" expected_action (Cons acc1 (Cons acc2 ())))
-              ... )) rest)
-
-    expected_action and acceptable_actions are emitted as bare MeTTa
-    symbols (not quoted strings) so they compare directly against the
-    `act_*` symbols produced by selectAction/full-step.
-
-    limit: if set, only the first N sessions are included (for smoke
-    testing without burning the full LLM call budget on every run).
-    names: if set, only sessions whose name is in this list are included
-    (takes priority over limit when both are given).
-    """
+    """Returns every session as a MeTTa cons-list of turn records, with
+    expected_action/acceptable_actions as bare symbols (compare directly
+    against act_* symbols). limit caps session count; names filters by name."""
     return _load_sessions_full_filtered(limit=limit, names=names)
 
 
 def load_session_a_smoke():
     """Zero-argument smoke-test entry point: only Session A. Kept as a
-    dedicated function (rather than relying on py-call marshalling None
-    and a string tuple into load_sessions_full's optional args) since
-    that argument-passing behavior hasn't been verified against a real
-    petta install."""
+    dedicated function rather than relying on py-call marshalling optional
+    args, since that behavior hasn't been verified against a real petta install."""
     return _load_sessions_full_filtered(names=["Session A - 10 turn mixed stress"])
 
 
