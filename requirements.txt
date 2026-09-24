@@ -1,0 +1,6 @@
+# Qwestor-PeTTa Python-side dependencies
+
+requests>=2.31.0          # context_parser.py: raw REST calls to the Gemini API
+python-dotenv>=1.0.0      # context_parser.py: loads GEMINI_API_KEY / GEMINI_MODEL from .env
+matplotlib>=3.7.0         # plot_evaluation_results.py: eval plots
+numpy>=1.24.0             # plot_evaluation_results.py: eval plots

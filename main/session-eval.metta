@@ -137,6 +137,27 @@
 )
 
 
+; ── reset state between sessions ──────────────
+; Without this, run-all-sessions-graded threads the SAME $space through
+; every session back to back, so session N's first turn would start
+; from whatever goals/mods/anti-goals/turn-count session N-1's LAST
+; turn left behind, instead of a clean slate. Only mattered once more
+; than one session was in a run (the smoke test's single session never
+; hit this). Reuses the exact default-state literal already used
+; everywhere else a fresh space gets set up (sessions_test.metta,
+; sessions_test_smoke.metta, the operators/test/*.metta files) so
+; there's one canonical "what does a fresh session start with" shape,
+; not a second copy that could drift from it.
+(= (reset-session-state $space)
+   (let* (
+      ($_ (remove-state $space))
+      ($_ (addState $space
+            (state (turn 0) (default-goals) (default-mods) (default-anti-goals) (alpha))))
+   )
+   True)
+)
+
+
 ; ── walk all sessions (Cons list of (Session name turns)), flatten records ──
 (= (run-all-sessions-graded $space $sessions)
    (case $sessions
@@ -147,6 +168,7 @@
           (
             ($name  (index-atom $s 1))
             ($turns (index-atom $s 2))
+            ($_     (reset-session-state $space))
             ($session-records (run-session-turns $space $name $turns 1))
           )
           (cons-concat $session-records (run-all-sessions-graded $space $rest))))

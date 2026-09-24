@@ -77,7 +77,7 @@ def _calibrate_action_signals(
 def parse_with_gemini(
     query: str,
     api_key: str,
-    model: str = "gemini-3.1-flash-lite",
+    model: str,
 ) -> dict[str, Any] | None:
     try:
         url = (
@@ -138,7 +138,7 @@ def parse_with_gemini(
         # can back off and try again, rather than the old behavior of
         # aborting immediately on 429 specifically. Gemini's own 503
         # message explicitly says these are temporary; a short-circuit
-        # here just pushes the failure straight to the fallback dict
+        # here just pushes the failure straight to the final RuntimeError
         # without ever giving the retry backoff a chance to work.
         if response.status_code in (429, 503):
             print(f"Transient error {response.status_code} -- will retry with backoff.")
@@ -292,12 +292,18 @@ def wrap_parser(query):
 
     load_dotenv(dotenv_path=env_path)
     api_key = os.getenv("GEMINI_API_KEY")
-    model_name = "gemini-3.1-flash-lite"
+    model_name = os.getenv("GEMINI_MODEL")
+    if not model_name:
+        raise RuntimeError(
+            "GEMINI_MODEL is not set. Add GEMINI_MODEL=<model-name> to your .env "
+            "file (same place as GEMINI_API_KEY)."
+        )
 
     # Real exponential backoff for transient errors (429/503). Gemini's own
     # 503 message says these are temporary and to "try again later" -- the
     # previous 0.5s/1.0s waits gave up before "later" ever arrived. This
-    # should make the fallback below fire rarely instead of routinely.
+    # should make the retries succeed rather than exhausting into the
+    # RuntimeError below.
     max_attempts = 5
     backoff_base = 3.0  # seconds: 2, 4, 8, 16
     result_dict = None
@@ -312,40 +318,16 @@ def wrap_parser(query):
             time.sleep(wait)
 
     if result_dict is None:
-        # This fallback dict mirrors operators/appraisal.metta:399-417's
-        # (context) default atom exactly, so a degraded run still produces
-        # a context shape the rest of the pipeline (and session_logger's
-        # CONTEXT_KEYS) already expects -- single source of truth for the
-        # actual values stays the .metta file; this just has to match it.
-        #
-        # IMPORTANT: this substitutes a fixed, generic context for whatever
-        # the query actually needed. Whatever action that generic profile
-        # happens to route to becomes this turn's prediction, essentially
-        # independent of the real query. The query text is logged below so
-        # any turn affected by this can be traced and excluded from
-        # accuracy analysis rather than silently counted as a real
-        # routing-logic result.
-        print(
-            f"⚠️ Gemini parsing failed after {max_attempts} attempts for query "
-            f"{query[:80]!r} — using fallback context instead of crashing the run. "
-            f"FALLBACK_CONTEXT_USED"
+        # No silent fallback: substituting a fixed, generic context here
+        # would feed fake appraisal values into this turn's state update
+        # (goal-vector / anti-goal alpha-blending), which then poisons
+        # every later turn in the session that builds on that state -- not
+        # just this one turn's prediction. Better to fail loudly like the
+        # original behavior and let the caller decide how to handle it.
+        raise RuntimeError(
+            f"LLM parsing failed - no context generated after {max_attempts} "
+            f"attempts (query: {query[:80]!r})"
         )
-        result_dict = {
-            "urgent": 0.00,
-            "complexity": 0.30,
-            "ambiguity": 0.00,
-            "expertise": 0.50,
-            "threshold": 0.30,
-            "topic_familiarity": 0.50,
-            "failure_signal": 0.30,
-            "intent_type": "mixed",
-            "reflective_intent": 0.50,
-            "verify_request": False,
-            "needs_external_evidence": 0.30,
-            "needs_task_plan": 0.20,
-            "needs_multi_source_integration": 0.30,
-            "valence": 0.00,
-        }
 
     ordered_keys = [
         "urgent",

@@ -53,19 +53,33 @@
         (add-context $space $context))))
 
 
-; --- Helpers to force transpiler to evaluate selectAction ---
-(= (get-best $scores $intent $lc $thr $margin)
+; --- Helper to force transpiler to evaluate selectAction ---
+; Was two separate helpers (get-best, get-sorted), each independently
+; re-calling selectAction from scratch to pull out one half of its
+; own already-paired ($best $sorted_scores) return -- i.e. selectAction
+; ran twice per turn for no reason. Consolidated into one call, with
+; case-based extraction afterward (not index-atom -- see the comment
+; in session-eval.metta: index-atom on a let*-bound call result was
+; observed pulling from the unreduced call term instead of the actual
+; value in this environment).
+(= (get-selection $scores $intent $lc $thr $margin)
    (case (selectAction $scores $intent $lc $thr $margin)
-     ( (($b $s) $b) )
+     ( (($b $s) ($b $s)) )
    )
 )
+(= (selection-best $sel)   (case $sel ( (($b $s) $b) )))
+(= (selection-sorted $sel) (case $sel ( (($b $s) $s) )))
 
-(= (get-sorted $scores $intent $lc $thr $margin)
-   (case (selectAction $scores $intent $lc $thr $margin)
-     ( (($b $s) $s) )
-   )
-)
-
+; full-step's return contract: ($best $style $appraisal $sorted_scores)
+; -- 4 values. Used to be 3 (no $sorted_scores); it was added because
+; session-eval.metta's run-turn needs the sorted per-action scores for
+; eval/margin logging (session_logger.write_logs' turn records include
+; them). The only other caller, main/sessions.metta's run-session (via
+; main-loop.metta, not part of the automated test suite), binds the
+; whole result to one opaque $result it never destructures/indexes
+; into -- so it isn't relying on a fixed arity and isn't broken by
+; this, but flagging it here explicitly so the contract isn't a silent
+; assumption for whoever reads this next.
 (= (full-step $space $query)
    (let*
      (
@@ -90,8 +104,9 @@
        ($thr     (find_by_key threshold $appraisal))
        ($margin  (getAlpha $space intent_margin))
 
-       ($best          (get-best $guarded $intent $lc $thr $margin))
-       ($sorted_scores (get-sorted $guarded $intent $lc $thr $margin))
+       ($selection     (get-selection $guarded $intent $lc $thr $margin))
+       ($best          (selection-best $selection))
+       ($sorted_scores (selection-sorted $selection))
 
        ($_ (println! ("[STEP 6] best:" $best "sorted:" $sorted_scores)))
 

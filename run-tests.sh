@@ -1,6 +1,5 @@
 
 #!/bin/bash
-#!/bin/bash
 # ─────────────────────────────────────────────────────────────────────────────
 # run-tests.sh — MeTTa/PeTTa test runner for Qwestor-PeTTa
 # ─────────────────────────────────────────────────────────────────────────────
@@ -11,6 +10,8 @@
 # OPTIONS:
 #   (none)         Default mode. Runs all test files found under */test/*.metta
 #                  and prints only pass/fail results and mismatches.
+#                  EXCLUDES the evaluation tests (main/test/sessions_test.metta
+#                  and main/test/sessions_test_smoke.metta) -- see --eval below.
 #
 #   --verbose      Full output mode. Prints everything including PeTTa's
 #                  internal transpiler output, Prolog goals, and all println!
@@ -31,7 +32,20 @@
 #
 #   --file <path>  Single file mode. Runs only the specified test file instead
 #                  of discovering all test files. Path can be relative or absolute.
+#                  Naming an evaluation test file directly here always runs it,
+#                  regardless of --eval/--eval-smoke/--eval-full.
 #                  Example: ./run-tests.sh --file operators/test/decision_test.metta
+#
+#   --eval         Also run BOTH evaluation tests (smoke + full) alongside the
+#                  regular suite. These make real Gemini API calls (network,
+#                  API cost, and much slower -- the full one runs 136 turns).
+#                  Shorthand for --eval-smoke --eval-full.
+#
+#   --eval-smoke   Also run main/test/sessions_test_smoke.metta (10-turn eval,
+#                  real Gemini calls) alongside the regular suite.
+#
+#   --eval-full    Also run main/test/sessions_test.metta (136-turn eval,
+#                  real Gemini calls) alongside the regular suite.
 #
 # EXAMPLES:
 #   ./run-tests.sh                                        # run all tests
@@ -40,6 +54,8 @@
 #   ./run-tests.sh --clean                                # run all, clean output
 #   ./run-tests.sh --file operators/test/routing_test.metta  # run one file
 #   ./run-tests.sh --file operators/test/routing_test.metta --clean  # one file, clean
+#   ./run-tests.sh --eval                                 # regular suite + both eval tests
+#   ./run-tests.sh --eval-smoke --clean                   # regular suite + smoke eval, clean output
 # ─────────────────────────────────────────────────────────────────────────────
 
 # Source bashrc to get the petta function
@@ -60,15 +76,27 @@ VERBOSE=false
 CLEAN=false
 FULL=false
 SINGLE_FILE=""
+EVAL_SMOKE=false
+EVAL_FULL=false
 
 for arg in "$@"; do
     case "$arg" in
-        --verbose) VERBOSE=true ;;
-        --full)    FULL=true ;;
-        --clean)   CLEAN=true ;;
-        --file)    shift; SINGLE_FILE="$1" ;;
+        --verbose)   VERBOSE=true ;;
+        --full)      FULL=true ;;
+        --clean)     CLEAN=true ;;
+        --file)      shift; SINGLE_FILE="$1" ;;
+        --eval)      EVAL_SMOKE=true; EVAL_FULL=true ;;
+        --eval-smoke) EVAL_SMOKE=true ;;
+        --eval-full)  EVAL_FULL=true ;;
     esac
 done
+
+# The evaluation tests make real Gemini API calls -- slow, costs API
+# usage, and sessions_test.metta alone runs 136 turns. Opt-in only
+# (--eval / --eval-smoke / --eval-full), never picked up by the
+# default bulk discovery below.
+EVAL_SMOKE_FILE="$PROJECT_ROOT/main/test/sessions_test_smoke.metta"
+EVAL_FULL_FILE="$PROJECT_ROOT/main/test/sessions_test.metta"
 
 # Strips ANSI color codes and deletes every PeTTa transpiler block:
 #   "--> metta runnable -->" ... up through the closing "^^^^^^^^^^" line
@@ -149,8 +177,23 @@ fi
 mapfile -t ALL_FILES < <(find "$PROJECT_ROOT" -path "*/test/*.metta" | sort -u)
 
 TEST_FILES=()
+SKIPPED_EVAL=()
 for f in "${ALL_FILES[@]}"; do
+    if [[ "$f" == "$EVAL_SMOKE_FILE" ]]; then
+        if $EVAL_SMOKE; then
+            TEST_FILES+=("$f")
+        else
+            SKIPPED_EVAL+=("$f")
+        fi
+    elif [[ "$f" == "$EVAL_FULL_FILE" ]]; then
+        if $EVAL_FULL; then
+            TEST_FILES+=("$f")
+        else
+            SKIPPED_EVAL+=("$f")
+        fi
+    else
         TEST_FILES+=("$f")
+    fi
 done
 
 if [ ${#TEST_FILES[@]} -eq 0 ]; then
@@ -159,6 +202,12 @@ if [ ${#TEST_FILES[@]} -eq 0 ]; then
 fi
 
 echo "Found ${#TEST_FILES[@]} test file(s)."
+if [ ${#SKIPPED_EVAL[@]} -gt 0 ]; then
+    echo "⏭️  Skipped ${#SKIPPED_EVAL[@]} evaluation test(s) (real Gemini calls, opt-in only):"
+    for f in "${SKIPPED_EVAL[@]}"; do
+        echo "     - ${f#$PROJECT_ROOT/}  (use --eval, or --eval-smoke/--eval-full)"
+    done
+fi
 
 FAILED=0
 FAILED_FILES=()
