@@ -55,7 +55,7 @@
         ($vr (getContext $space verify_request))
         ($urg (getContext $space urgent))
         ($val (getContext $space valence))
-        ($target_u (if (== $urg 1) 1.0 0.0))
+        ($target_u (if (>= $urg 0.5) 1.0 0.0))
 
 
         ($_ (println! ("complexity: " $cx " ambiguity: " $amb " expertise: " $exp " threshold: " $thr " failure_signal: " $fs " topic_familiarity: " $fam " reflective_intent: " $ri " verify_request: " $vr)))
@@ -179,7 +179,7 @@
             (* 0.40 $thr)
             (+ (* 0.30 $fs)
                (+ (* 0.20 $amb)
-                  (* 0.10 (if (== $urg 1) 1 0))))))))
+                  (* 0.10 (if (>= $urg 0.5) 1 0))))))))
         ($_ (println! ("risk_aversion_target: " $risk_aversion_target)))
 
         ($m_risk_aversion
@@ -197,7 +197,7 @@
                (+ (* 0.20 $fam)
                   (+ (* 0.15 (- 1.0 $fs))
                      (- (* -0.20 $amb)
-                        (* 0.10 (if (== $urg 1) 1 0))))))))))
+                        (* 0.10 (if (>= $urg 0.5) 1 0))))))))))
         ($_ (println! ("error_tolerance_target: " $error_tolerance_target)))
 
         ($m_error_tolerance
@@ -258,9 +258,10 @@
         ($u (_effective $m_urgency $target_u $coldWeight))
         ($res (_effective $m_resolution $cx $coldWeight))
         ($ux (_effective $m_user_expertise $exp $coldWeight))
-        ($_ (println! ("After cold weighting: urgency: " $u " resolution: " $res " user experience: " $ux " threshold: " $thre)))
+        ($_ (println! ("After cold weighting: urgency: " $u " resolution: " $res " user experience: " $ux " threshold: " $thr)))
 
         ($threshold (_effective $m_threshold $thr $coldWeight))
+        ($low_conf (- 1.0 $threshold))  ; ← ADDED: Calculate low_confidence
         ($urgent (getContext $space urgent))
         ($_ (println! ("urgent " $urgent)))
         ($intentType (getContext $space intent_type))
@@ -319,6 +320,7 @@
                         (resolution $res)
                         (user_expertise $ux)
                         (threshold $threshold)
+                        (low_confidence $low_conf)  ; ← ADDED: Include low_confidence in results
                         (securing $securing)
                         (approach $approach)
                         (arousal $arousal)
