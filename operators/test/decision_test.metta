@@ -7,6 +7,8 @@
 
 !(bind! &space (new-space))
 !(bind! &StyleSpace (new-space))
+!(addAlpha &StyleSpace (alpha))
+!(addState &StyleSpace (state (turn 0) (default-goals) (default-mods) (default-anti-goals) (alpha)))
 
 !(addAlpha &space (alpha))
 !(addState &space (state (turn 0) (default-goals) (default-mods) (default-anti-goals) (alpha)))

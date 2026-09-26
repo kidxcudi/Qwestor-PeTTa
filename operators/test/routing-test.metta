@@ -303,7 +303,7 @@
 !(test
   (guard-verify
     ((act_verify 10))
-    ((ambiguity 0.50) (threshold 0.60) (low_confidence 0.50) (verify_request 0) (complexity 0.80) (intent_type reflective))
+    ((ambiguity 0.50) (threshold 0.60) (threshold_signal 0.80) (low_confidence 0.50) (verify_request 0) (complexity 0.80) (intent_type reflective))
     &space
   )
   ((act_verify 9.8))

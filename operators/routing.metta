@@ -159,25 +159,33 @@
           ($z_v (get-action-score $scores act_synthesize))
           ($_ (println! ("act_synthesize: "$z_v)))
 
-          
+          ($s3 (if (and (> $s_v (ACTION_BLOCKED_SCORE)) (> $d_v (ACTION_BLOCKED_SCORE)))
+                   (if (and (>= $ext 0.70) (and (>= $ext (+ $task 0.15)) (>= $ext (- $multi 0.02))))
+                       (let* (($b1 (adjust-action-score $scores act_search 0.26))
+                              ($b2 (adjust-action-score $b1 act_decompose -0.26))
+                              ($z_bonus (if (> $z_v (ACTION_BLOCKED_SCORE)) -0.12 0.0)))
+                         (adjust-action-score $b2 act_synthesize $z_bonus))
+                       (if (and (>= $task 0.72) (and (>= $task (+ $ext 0.18)) (>= $task (+ $multi 0.12))))
+                           (let* (($b1 (adjust-action-score $scores act_decompose 0.18))
+                                  ($b2 (adjust-action-score $b1 act_search -0.12))
+                                  ($z_bonus (if (> $z_v (ACTION_BLOCKED_SCORE)) -0.10 0.0)))
+                             (adjust-action-score $b2 act_synthesize $z_bonus))
+                           (if (and (> $z_v (ACTION_ACTIVE_FLOOR)) (and (>= $multi 0.72) (>= $multi (+ $task 0.15))))
+                               (let* (($b1 (adjust-action-score $scores act_synthesize 0.16)))
+                                 (adjust-action-score $b1 act_decompose -0.16))
+                               $scores)))
+                   $scores))
           )
- 
-     (if (and (> $s_v (ACTION_BLOCKED_SCORE)) (> $d_v (ACTION_BLOCKED_SCORE)))
-         (if (and (>= $ext 0.70) (and (>= $ext (+ $task 0.15)) (>= $ext (- $multi 0.02))))
-             (let* (($b1 (adjust-action-score $scores act_search 0.26))
-                    ($b2 (adjust-action-score $b1 act_decompose -0.26))
-                    ($z_bonus (if (> $z_v (ACTION_BLOCKED_SCORE)) -0.12 0.0)))
-               (adjust-action-score $b2 act_synthesize $z_bonus))
-             (if (and (>= $task 0.72) (and (>= $task (+ $ext 0.18)) (>= $task (+ $multi 0.12))))
-                 (let* (($b1 (adjust-action-score $scores act_decompose 0.18))
-                        ($b2 (adjust-action-score $b1 act_search -0.12))
-                        ($z_bonus (if (> $z_v (ACTION_BLOCKED_SCORE)) -0.10 0.0)))
-                   (adjust-action-score $b2 act_synthesize $z_bonus))
-                 (if (and (> $z_v (ACTION_ACTIVE_FLOOR)) (and (>= $multi 0.72) (>= $multi (+ $task 0.15))))
-                     (let* (($b1 (adjust-action-score $scores act_synthesize 0.16)))
-                       (adjust-action-score $b1 act_decompose -0.16))
-                     $scores)))
-         $scores)))
+
+     ;; The three branches above only fire when act_decompose is ALSO
+     ;; unblocked -- but this case needs help exactly when needs_task_plan is
+     ;; LOW (decompose correctly blocked). Verified zero overlap in dataset.
+     (if (and (> $z_v (ACTION_BLOCKED_SCORE))
+              (and (>= $multi 0.90)
+                   (and (>= $ext 0.50)
+                        (and (>= $multi (+ $ext 0.20)) (<= $task 0.30)))))
+         (adjust-action-score $s3 act_synthesize 1.05)
+         $s3)))
 ;; GUARD: VERIFY
 ;; Decision: Block verify if ambiguity is too high or request is absent.
 (= (guard-verify $scores $ctx $space)
@@ -189,6 +197,12 @@
 
           ($low   (- 1.0 $thr))
           ($_ (println! ("low: "$low)))
+
+          ;; Old condition (and (>= $thr 0.55) (>= $low 0.40)) reduced to
+          ;; $thr in [0.55,0.60] since $low=(1.0-$thr) -- nearly unreachable.
+          ;; threshold_signal (independent field) separates cleanly at 0.70.
+          ($thr_sig (ctx-val $ctx threshold_signal))
+          ($_ (println! ("thr_sig: "$thr_sig)))
 
           ($fw (ctx-val $ctx failure_wariness))
 
@@ -203,12 +217,16 @@
           ($intent (ctx-val $ctx intent_type))
           ($_ (println! ("intent: "$intent)))
 
-          ;; Core block
-          ($s1 (if (>= $amb 0.85)
+          ;; ambiguity>=0.85 used to block unconditionally; turns with
+          ;; threshold_signal>=0.70 genuinely still need verify (unblocking
+          ;; alone wasn't enough, so a matching score bonus is added too).
+          ($s1 (if (and (>= $amb 0.85) (< $thr_sig 0.70))
                    (set-action-score $scores act_verify (ACTION_BLOCKED_SCORE))
-                   (if (not (or (== $verify 1) (or (and (>= $thr 0.55) (>= $low 0.40)) (>= $fw 0.45))))
+                   (if (not (or (== $verify 1) (or (>= $thr_sig 0.70) (>= $fw 0.45))))
                        (set-action-score $scores act_verify (ACTION_BLOCKED_SCORE))
-                       $scores)))
+                       (if (and (and (>= $amb 0.85) (>= $thr_sig 0.70)) (== $verify 0))
+                           (adjust-action-score $scores act_verify 0.35)
+                           $scores))))
           ($curr (get-action-score $s1 act_verify)))
      (if (== $curr (ACTION_BLOCKED_SCORE)) $s1
          (let* (($s2 (if (== $verify 1)
