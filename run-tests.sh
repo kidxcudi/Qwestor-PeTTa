@@ -1,4 +1,3 @@
-
 #!/bin/bash
 # ─────────────────────────────────────────────────────────────────────────────
 # run-tests.sh — MeTTa/PeTTa test runner for Qwestor-PeTTa

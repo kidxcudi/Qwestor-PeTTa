@@ -12,6 +12,7 @@ import csv
 import json
 from collections import Counter, defaultdict
 from datetime import datetime
+import os
 from pathlib import Path
 import sys
 from typing import Any
@@ -521,7 +522,8 @@ def write_logs(run_records: Any, base_dir_str: str) -> list:
         print(f"Saved plots to {plot_dir}")
     except Exception as exc:  # noqa: BLE001 - plotting is best-effort
         print(f"(plot generation skipped: {exc})")
-    sys._exit(0)
+        
+    os._exit(0)
     # Returned as a plain list (not a dict) since py-call results cross
     # back into MeTTa most predictably as an ordered pair list here,
     # matching the [key, value] convention used elsewhere in this repo.
