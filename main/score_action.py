@@ -1,4 +1,5 @@
 import re
+import sys
 
 def _clamp01(x: float) -> float:
     return max(0.0, min(1.0, float(x)))
@@ -187,6 +188,25 @@ def _rabbit_hole_penalty(action: str, cx: float, ambiguity: float) -> float:
     }.get(action, 0.20)
 
 
+# Rows of ACTIONS hand out different total credit (respond's 14 numbers sum to ~7, synthesize's to ~10).
+# Each relevance is shifted by a per-action constant, computed from the table at load time, so all rows
+# have the same average total over cx.
+_CX_GRID = [i / 20 for i in range(21)]
+
+
+def _row_total(effects: dict, cx: float) -> float:
+    return sum(e(cx) if callable(e) else float(e) for e in effects.values())
+
+
+_ROW_AVG = {a: sum(_row_total(e, cx) for cx in _CX_GRID) / len(_CX_GRID) for a, e in ACTIONS.items()}
+_ROW_TARGET = sum(_ROW_AVG.values()) / len(_ROW_AVG)
+_ROW_SHIFT = {a: (_ROW_TARGET - _ROW_AVG[a]) / len(ACTIONS[a]) for a in ACTIONS}
+
+# With the rows level, only search and synthesize still over-win, so they carry a fitted penalty.
+# Moving either by 0.3 changes accuracy by only a turn or two.
+_ACTION_PENALTY = {"act_search": -1.19, "act_synthesize": -1.64}
+
+
 # core scoring engine, corresponds to adjustments.py file
 
 def _score_actions(
@@ -206,6 +226,9 @@ def _score_actions(
 ) -> dict[str, float]:
     scores: dict[str, float] = {}
 
+    # The formulas below were fit on 1 - threshold; the appraisal's low_confidence still drives the risk terms.
+    lowconf = _clamp01(1.0 - threshold)
+
     for action, effects in ACTIONS.items():
         score = 0.0
         for goal, weight in weights.items():
@@ -213,128 +236,145 @@ def _score_actions(
             if effect is None:
                 continue
             rel = effect(cx) if callable(effect) else float(effect)
-            score += float(weight) * float(rel)
+            score += float(weight) * (float(rel) + _ROW_SHIFT[action])
 
+        # Per-action formulas: coefficients fitted on the tuning sessions, rounded to 2 decimals.
         if action == "act_clarify":
-            score += 0.90 * ambiguity - 0.35 * ux - 0.15 * u + 0.20 * threshold
-            score += 0.20 * securing
-            score += 0.10 * coherence - 0.08 * valence
+            score += 0.76 * ambiguity - 0.34 * ux - 0.07 * u + 0.18 * threshold
+            score += 0.21 * securing
+            score += 0.1 * coherence - 0.04 * valence
             score += 0.22 * social - 0.06 * originality
-            score += 0.08 * (1.0 - error_tolerance)
-            score -= 0.55 * answerability
+            score += 0.13 * (1.0 - error_tolerance)
+            score -= 0.58 * answerability
             score -= 0.20 * help_short
             score -= 0.15 * anti_redundant
-            if ambiguity > 0.75 and (threshold_signal > 0.55 or low_confidence > 0.45):
-                score += 0.18
-
+            # very ambiguous and unsure -> ask
+            if ambiguity > 0.75 and (threshold_signal > 0.55 or lowconf > 0.45):
+                score += 0.32
+            score -= 0.18 * reflective_intent
         elif action == "act_respond":
-            score += 0.35 * u + 0.25 * (1.0 - ambiguity) + 0.15 * ux - 0.20 * cx
-            score += 0.20 * familiarity - 0.35 * threshold - 0.30 * failure_wariness
-            score -= 0.35 * securing + 0.20 * low_confidence
-            score += 0.10 * (1.0 - arousal)
-            score += 0.12 * coherence + 0.10 * valence
+            score += 0.78 * u + 0.33 * (1.0 - ambiguity) + 0.21 * ux - 0.05 * cx
+            score += 0.25 * familiarity - 0.2 * threshold - 0.2 * failure_wariness
+            score += 0.08 * lowconf - 0.35 * securing
+            score += 0.13 * (1.0 - arousal)
+            score += 0.12 * coherence - 0.07 * valence
             score += 0.14 * social - 0.06 * originality
-            score -= 0.18 * risk_aversion
-            score += 0.30 * help_short - 0.15 * help_long
+            score -= 0.04 * risk_aversion
+            score += 0.4 * help_short - 0.15 * help_long
             score += 0.45 * answerability
-            score += 0.22 * error_tolerance
-            score += 0.16 * help_short
-            score += 0.12 * anti_redundant
-            if cx >= 0.50:
-                score -= 0.08 * knowledge + 0.10 * success_breakthrough
-
+            score += 0.38 * error_tolerance
+            if cx >= 0.5:
+                score -= 0.08 * knowledge + 0.1 * success_breakthrough
         elif action == "act_search":
-            score += 0.35 * cx + 0.20 * res - 0.15 * u
-            score += (0.35 * threshold + 0.35 * (1.0 - familiarity)
-                      + 0.30 * failure_wariness)
-            score += 0.15 * securing
-            score += 0.08 * arousal
-            score += 0.06 * coherence + 0.02 * valence
-            score += 0.10 * originality + 0.06 * social
-            score += 0.08 * (1.0 - risk_aversion)
-            score += 0.10 * (1.0 - error_tolerance)
-            score += 0.10 * creativity
+            score += 0.34 * cx + 0.02 * res - 0.21 * u
+            score += 0.26 * threshold + 0.35 * (1.0 - familiarity) + 0.3 * failure_wariness
+            score -= 0.03 * securing
+            score += 0.16 * arousal
+            score += 0.06 * coherence + 0.1 * valence
+            score += 0.1 * originality + 0.06 * social
+            score += 0.2 * (1.0 - risk_aversion)
+            score += 0.18 * (1.0 - error_tolerance)
+            score += 0.16 * creativity
             score += 0.06 * help_long - 0.08 * help_short
             score += 0.14 * knowledge + 0.12 * novelty + 0.08 * success_breakthrough
-            score += 0.50 * needs_external_evidence
-            score += 0.12 * needs_multi_source_integration
-            score -= 0.08 * needs_task_plan
-            score -= reflective_search_penalty * reflective_intent
-
+            score += 0.58 * needs_external_evidence
+            score += 0.31 * needs_multi_source_integration
+            score -= 0.2 * needs_task_plan
+            score += 0.05 * reflective_intent
+            # no real need for outside evidence
+            if needs_external_evidence < 0.5:
+                score -= 0.77
         elif action == "act_verify":
-            score += 0.65 * threshold + 0.75 * low_confidence + 0.35 * failure_wariness
-            score += 0.15 * cx - 0.20 * u - 0.10 * ambiguity
-            score += 0.30 * securing
+            score += 0.4 * threshold + 0.45 * lowconf + 0.25 * failure_wariness
+            score += 0.1 * cx - 0.3 * u - 0.1 * ambiguity
+            score += 0.25 * securing
             score += 0.14 * coherence - 0.14 * valence
-            score += 0.10 * social - 0.08 * originality
-            score += 0.25 * risk_aversion
-            score -= 0.08 * arousal
-            score += 0.55 * (1.0 - error_tolerance)
+            score += 0.1 * social - 0.08 * originality
+            score += 0.2 * risk_aversion
+            score -= 0.1 * arousal
+            score += 0.45 * (1.0 - error_tolerance)
             score += 0.08 * (1.0 - creativity)
-            score += 0.08 * help_long - 0.10 * help_short
-            score += 0.32 * (1.0 if verify_request else 0.0)
+            score += 0.08 * help_long - 0.1 * help_short
+            if verify_request:
+                score += 0.32
             score += 0.05 * knowledge
-
         elif action == "act_decompose":
-            score += 0.30 * cx + 0.30 * res + 0.10 * (1.0 - ambiguity) - 0.12 * u
-            score -= 0.28 * ambiguity
-            if cx >= 0.60 and ambiguity <= 0.60:
-                score += 0.10
+            score += 0.19 * cx + 0.46 * res + 0.14 * (1.0 - ambiguity) - 0.19 * u
+            score -= 0.44 * ambiguity
+            # complex, unambiguous, plan-shaped request
+            if cx >= 0.6 and ambiguity <= 0.6 and needs_task_plan >= 0.65:
+                score -= 0.09
+            # trivial turn: don't break it down
             if cx < 0.35:
-                score -= 0.35
-            score += 0.10 * approach
-            score += 0.10 * arousal
-            score += 0.10 * coherence + 0.04 * valence
+                score -= 0.29
+            score += 0.17 * approach
+            score += 0.02 * arousal
+            score += 0.1 * coherence + 0.04 * valence
             score += 0.12 * originality + 0.08 * social
             score += 0.08 * creativity
-            score -= 0.08 * (1.0 - error_tolerance)
+            score -= 0.21 * (1.0 - error_tolerance)
             score += 0.12 * help_long - 0.12 * help_short
-            score += 0.08 * knowledge + 0.06 * novelty + 0.10 * success_breakthrough
-            score += 0.24 * needs_task_plan
-            score -= 0.12 * needs_external_evidence
-            score += 0.02 * needs_multi_source_integration
-
+            score += 0.08 * knowledge + 0.06 * novelty + 0.1 * success_breakthrough
+            score += 0.18 * needs_task_plan
+            score -= 0.09 * needs_external_evidence
+            score += 0.05 * needs_multi_source_integration
+            # not clearly a multi-step task
+            if needs_task_plan < 0.9:
+                score -= 0.45
         elif action == "act_think":
-            score += 0.35 * cx + 0.25 * ambiguity + 0.35 * approach
-            score += 0.10 * low_confidence + 0.10 * (1.0 - u)
-            score -= 0.10 * threshold
-            score += 0.20 * arousal
+            rscale = 0.09 + 0.75 * reflective_intent
+            cscale = 0.72 + 0.71 * reflective_intent
+            score += 0.19 * cx + 0.13 * ambiguity + 0.29 * approach * rscale
+            score += 0.12 * lowconf + 0.23 * (1.0 - u)
+            score += 0.38 * arousal
             score += 0.08 * coherence + 0.02 * valence
             score += 0.14 * originality + 0.04 * social
-            score += 0.10 * (1.0 - risk_aversion)
-            score += 0.26 * creativity
-            score -= 0.14 * (1.0 - error_tolerance)
-            score += 0.10 * help_long - 0.08 * help_short
-            score += 0.10 * knowledge + 0.12 * novelty + 0.16 * success_breakthrough
-            score += reflective_think_bonus * reflective_intent
-            score -= 0.30 * anti_redundant * (0.70 + 0.30 * familiarity)
-            score -= 0.16 * answerability
-            if (cx >= 0.70 and approach >= 0.62 and (ambiguity >= 0.25 or low_confidence >= 0.30)):
-                score += 0.07
-            elif (cx >= 0.65 and approach >= 0.58 and (ambiguity >= 0.22 or low_confidence >= 0.28)):
-                score += 0.03
-
+            score -= 0.06 * (1.0 - risk_aversion)
+            score += 0.31 * creativity * cscale
+            score -= 0.27 * (1.0 - error_tolerance)
+            score += 0.1 * help_long - 0.08 * help_short
+            score += 0.1 * knowledge + 0.12 * novelty + 0.16 * success_breakthrough
+            score += 0.1 * reflective_intent
+            score -= 0.3 * anti_redundant * (0.7 + 0.3 * familiarity)
+            score += 0.03 * answerability
+            # low-complexity turns rarely need deliberate thinking
+            if cx < 0.5:
+                score -= 1.0
+            if (cx >= 0.7 and approach >= 0.62 and reflective_intent >= 0.35
+                    and (ambiguity >= 0.25 or lowconf >= 0.3)):
+                score += 0.01
+            elif (cx >= 0.65 and approach >= 0.58 and reflective_intent >= 0.3
+                    and (ambiguity >= 0.22 or lowconf >= 0.28)):
+                score += 0.05
+            if cx >= 0.7 and reflective_intent >= 0.55 and needs_task_plan < 0.65:
+                score += 0.14
+            # ambiguous multi-step requests are clarify cases, not think cases
+            if ambiguity >= 0.6 and needs_task_plan >= 0.55:
+                score -= 0.99
         elif action == "act_synthesize":
-            score += 0.24 * cx + 0.12 * res - 0.10 * u
+            score += 0.24 * cx + 0.12 * res - 0.1 * u
             score += 0.16 * (1.0 - ambiguity) + 0.14 * (1.0 - familiarity)
             score += 0.12 * approach + 0.08 * arousal + 0.16 * creativity
             score += 0.16 * coherence + 0.08 * valence
-            score += 0.22 * originality + 0.10 * social
-            score += 0.06 * (1.0 - low_confidence)
-            score += 0.12 * knowledge + 0.08 * novelty + 0.10 * success_breakthrough
-            score += 0.14 * help_long - 0.10 * help_short
+            score += 0.22 * originality + 0.1 * social
+            score += 0.06 * (1.0 - lowconf)
+            score += 0.12 * knowledge + 0.08 * novelty + 0.1 * success_breakthrough
+            score += 0.14 * help_long - 0.1 * help_short
             score -= 0.12 * risk_aversion
             score -= 0.18 * threshold
             score -= 0.16 * failure_wariness
             score += 0.55 * needs_multi_source_integration
             score -= 0.12 * needs_external_evidence
             score -= 0.18 * needs_task_plan
-            if cx >= 0.55 and ambiguity <= 0.60:
+            if cx >= 0.55 and ambiguity <= 0.6:
                 score += 0.16
-            if ambiguity >= 0.80:
+            if ambiguity >= 0.8:
                 score -= 0.28
             if verify_request:
                 score -= 0.25
+
+        score += _ACTION_PENALTY.get(action, 0.0)
+
         # this corresponds to penalities.py file
         # ── penalty deductions ──────────────────────────────────
         score -= anti_hall * _hallucination_penalty(action, cx=cx, ambiguity=ambiguity)
@@ -396,38 +436,80 @@ def _score_actions(
 # metta list parsers
 
 
-def _parse_metta_pairlist(metta_str: str) -> dict:
+def _parse_metta_pairlist(data) -> dict:
     """
-    Parse a MeTTa flat-pair list such as
-      ((key1 val1) (key2 val2) ...)
-    into a Python dict.  Values that look like numbers become floats;
-    'true'/'false' become bools; everything else stays a string.
+    Robust parser for MeTTa pair lists.
+    Handles Python lists/tuples (e.g., [['key', val], ...]) and MeTTa strings (e.g., "(key val) ...")
     """
-    text = str(metta_str).strip()
-    pairs = re.findall(r'\((\S+)\s+([^()]+?)\)', text)
     result = {}
+    
+    def process_val(v):
+        if isinstance(v, bool):
+            return v
+        if isinstance(v, (int, float)):
+            return float(v)
+        v_str = str(v).strip()
+        if v_str.lower() == 'true':
+            return True
+        if v_str.lower() == 'false':
+            return False
+        try:
+            return float(v_str)
+        except ValueError:
+            return v_str
+
+    # 1. Handle Python list/tuple format
+    if isinstance(data, (list, tuple)):
+        for item in data:
+            if isinstance(item, (list, tuple)) and len(item) >= 2:
+                k = str(item[0])
+                result[k] = process_val(item[1])
+        return result
+
+    # 2. Handle string format
+    text = str(data).strip()
+    # Normalize Python list syntax to MeTTa syntax just in case it's stringified
+    text = text.replace("[", "(").replace("]", ")").replace(",", "")
+    
+    pairs = re.findall(r'\((\S+)\s+([^()]+?)\)', text)
     for k, v in pairs:
-        v = v.strip()
-        if v.lower() == 'true':
-            result[k] = True
-        elif v.lower() == 'false':
-            result[k] = False
-        else:
-            try:
-                result[k] = float(v)
-            except ValueError:
-                result[k] = v
+        result[k] = process_val(v)
+        
     return result
 
 
-def _parse_state_block(metta_str: str) -> dict:
+def _parse_state_block(data) -> dict:
     """
     Pull values out of the (state ...) atom that lives in the space list.
     Specifically extracts anti-goals and alpha constants.
+    Handles both lists and strings.
     """
-    text = str(metta_str)
     extra = {}
+    
+    def process_val(v):
+        if isinstance(v, bool):
+            return v
+        if isinstance(v, (int, float)):
+            return float(v)
+        try:
+            return float(str(v).strip())
+        except ValueError:
+            return 0.0
 
+    # 1. Handle Python list/tuple format
+    if isinstance(data, (list, tuple)):
+        for item in data:
+            if isinstance(item, (list, tuple)) and len(item) >= 2:
+                k = str(item[0]).replace("(", "").replace(")", "").strip()
+                if k in ("hallucinate", "redundant", "rabbit_hole", "premature", 
+                         "reflective_think_bonus", "reflective_search_penalty", 
+                         "topic_familiarity", "failure_wariness", "m_failure_wariness"):
+                    extra[k] = process_val(item[1])
+
+    # 2. Handle string format via regex
+    text = str(data)
+    text = text.replace("[", "(").replace("]", ")").replace(",", "").replace("'", "").replace('"', "")
+    
     for name in ("hallucinate", "redundant", "rabbit_hole", "premature"):
         m = re.search(rf'\({name}\s+([0-9.]+)\)', text)
         if m:
@@ -448,9 +530,13 @@ def _parse_state_block(metta_str: str) -> dict:
 
 def compute_scores(appraisal_metta, weights_metta, space_metta) -> str:
 
-    ap   = _parse_metta_pairlist(str(appraisal_metta))
-    wt   = _parse_metta_pairlist(str(weights_metta))
-    sp   = _parse_state_block(str(space_metta))
+    ap   = _parse_metta_pairlist(appraisal_metta)
+    wt   = _parse_metta_pairlist(weights_metta)
+    sp   = _parse_state_block(space_metta)
+
+    if not ap or not wt:
+        print(f"[score_action] WARNING: empty parse (ap={len(ap)}, wt={len(wt)}) -> scores will be "
+              f"constant defaults", file=sys.stderr)
 
 
     anti_hall        = float(sp.get("hallucinate",  ap.get("hallucinate",  0.35)))

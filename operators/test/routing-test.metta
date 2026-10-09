@@ -256,6 +256,25 @@
   ((act_search 10.26) (act_decompose 9.74) (act_synthesize -1000000000.0))
 )
 
+; search-arb rule 4: synthesize rescue when decompose is blocked and multi-source is dominant
+; (Session K t7 / Session M t4)
+!(test
+  (guard-search-arb
+    ((act_search 10) (act_decompose -1000000000.0) (act_synthesize 10))
+    ((needs_external_evidence 0.60) (needs_task_plan 0.20) (needs_multi_source_integration 1.00))
+  )
+  ((act_search 10) (act_decompose -1000000000.0) (act_synthesize 11.05))
+)
+
+; search-arb rule 4 must NOT fire when multi-source is not >= ext + 0.20
+!(test
+  (guard-search-arb
+    ((act_search 10) (act_decompose -1000000000.0) (act_synthesize 10))
+    ((needs_external_evidence 0.90) (needs_task_plan 0.20) (needs_multi_source_integration 1.00))
+  )
+  ((act_search 10) (act_decompose -1000000000.0) (act_synthesize 10))
+)
+
 ; ─────────────────────────────────────────────
 ; test for guard-verify
 ; NOTE: guard-verify reads failure_wariness via getMod from &space.
@@ -302,7 +321,7 @@
 !(test
   (guard-verify
     ((act_verify 10))
-    ((ambiguity 0.50) (threshold 0.60) (low_confidence 0.50) (verify_request 0) (complexity 0.80) (intent_type reflective))
+    ((ambiguity 0.50) (threshold 0.60) (threshold_signal 1.00) (low_confidence 0.50) (verify_request 0) (complexity 0.80) (intent_type reflective))
     &space
   )
   ((act_verify 9.8))
@@ -318,6 +337,36 @@
     &space
   )
   ((act_verify 10.45))
+)
+
+; guard-verify: ambiguity >= 0.85 with weak threshold_signal -> blocked
+!(test
+  (guard-verify
+    ((act_verify 10))
+    ((ambiguity 0.90) (threshold_signal 0.60) (verify_request 0) (complexity 0.60) (intent_type mixed))
+    &space
+  )
+  ((act_verify -1000000000.0))
+)
+
+; guard-verify: a mid-range threshold_signal (0.80) without a verify_request no longer opens verify
+!(test
+  (guard-verify
+    ((act_verify 10))
+    ((ambiguity 0.40) (threshold_signal 0.80) (verify_request 0) (complexity 0.60) (intent_type mixed))
+    &space
+  )
+  ((act_verify -1000000000.0))
+)
+
+; guard-verify: ambiguity >= 0.85 but saturated threshold_signal (1.00) -> stays eligible, +0.35
+!(test
+  (guard-verify
+    ((act_verify 10))
+    ((ambiguity 0.90) (threshold_signal 1.00) (verify_request 0) (complexity 0.60) (intent_type mixed))
+    &space
+  )
+  ((act_verify 10.35))
 )
 
 ; ─────────────────────────────────────────────
