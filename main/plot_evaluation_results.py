@@ -339,6 +339,25 @@ def plot_session_margins(axis: plt.Axes, evaluation: dict[str, Any]) -> None:
         markeredgecolor=PURPLE,
         linewidth=2.0,
     )
+    # Label each point with "scored/total": guard-forced turns have no meaningful margin and are
+    # excluded from the average, so a session with few scored turns is a small-sample estimate.
+    # (Older result files without these fields simply get no labels.)
+    for xi, s_id, val in zip(x, sessions, values):
+        stats = evaluation["sessions"][s_id]
+        total = stats.get("turn_count")
+        forced = stats.get("forced_decision_count")
+        if total is None or forced is None:
+            continue
+        scored = total - forced
+        axis.annotate(
+            f"{scored}/{total}",
+            (xi, val),
+            textcoords="offset points",
+            xytext=(0, 9),
+            ha="center",
+            fontsize=7,
+            color="#B91C1C" if scored < 4 else "#555555",
+        )
     overall = finite_number(evaluation["average_decision_margin"])
     axis.axhline(overall, color=ORANGE, linestyle="--", linewidth=1.3)
     axis.text(
@@ -351,7 +370,7 @@ def plot_session_margins(axis: plt.Axes, evaluation: dict[str, Any]) -> None:
     )
     axis.set_xticks(x, [short_session_name(s) for s in sessions])
     axis.set_ylabel("Average decision margin")
-    axis.set_title("Average Top-1/Top-2 Decision Margin by Session")
+    axis.set_title("Average Top-1/Top-2 Decision Margin by Session\n(labels: turns scored / total; guard-forced turns excluded)", fontsize=10)
     style_axis(axis)
 
 

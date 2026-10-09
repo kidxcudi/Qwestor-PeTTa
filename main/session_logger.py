@@ -170,15 +170,29 @@ def _format_score_top3_text(score_top3: list[list]) -> str:
     return " | ".join(parts)
 
 
+# Guards mark a ruled-out action with a score of -1e9.  Anything at or below this floor is not a
+# real competitor, so it must not be used as the "runner-up" when measuring a decision margin.
+_BLOCKED_FLOOR = -1e8
+
+
 def _decision_margin(score_top3: list[list]) -> float | None:
-    """Top-1 minus top-2 score. None when fewer than two candidates
-    were scored."""
-    if len(score_top3) < 2:
-        return None
+    """Top-1 minus the best *active* runner-up (blocked actions are skipped).
+
+    Returns None when there is no active runner-up -- i.e. the guards ruled out every other
+    action, so the decision was forced rather than won on score.  Such turns have no meaningful
+    margin; they are left out of average_decision_margin and counted separately in
+    forced_decision_count.  (Previously a blocked runner-up at -1e9 gave a margin of ~1e9 and
+    swamped the average.)"""
     try:
-        return round(float(score_top3[0][1]) - float(score_top3[1][1]), 6)
+        scores = [float(entry[1]) for entry in score_top3]
     except (TypeError, ValueError, IndexError):
         return None
+    if len(scores) < 2 or scores[0] <= _BLOCKED_FLOOR:
+        return None
+    active_runner_ups = [x for x in scores[1:] if x > _BLOCKED_FLOOR]
+    if not active_runner_ups:
+        return None
+    return round(scores[0] - max(active_runner_ups), 6)
 
 
 def _metrics_for(turns: list[dict]) -> dict[str, Any]:
@@ -193,6 +207,8 @@ def _metrics_for(turns: list[dict]) -> dict[str, Any]:
         if t.get("decision_margin") is not None
     ]
     turn_count = len(labeled)
+    # turns decided by guards alone (no active runner-up) -> margin is None
+    forced_decisions = sum(1 for t in labeled if t.get("decision_margin") is None)
 
     predicted_counts = Counter(
         str(t.get("predicted_action", "")) for t in labeled if t.get("predicted_action")
@@ -218,6 +234,7 @@ def _metrics_for(turns: list[dict]) -> dict[str, Any]:
         "average_decision_margin": (
             round(sum(margins) / len(margins), 6) if margins else None
         ),
+        "forced_decision_count": forced_decisions,
         "predicted_action_counts": dict(sorted(predicted_counts.items())),
         "expected_action_counts": dict(sorted(expected_counts.items())),
         "confusion_matrix": {
@@ -501,7 +518,9 @@ def write_logs(run_records: Any, base_dir_str: str) -> list:
     )
     print(
         f"Top-3 hit rate: {overall_metrics['top3_hit_rate']}, "
-        f"avg decision margin: {overall_metrics['average_decision_margin']}"
+        f"avg decision margin: {overall_metrics['average_decision_margin']} "
+        f"(over turns won on score; {overall_metrics['forced_decision_count']} "
+        f"guard-forced turns excluded)"
     )
     print(f"Saved eval files to {eval_dir}")
     print(f"Saved logs to {logs_dir}")
